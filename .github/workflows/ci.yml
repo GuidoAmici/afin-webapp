@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - staging
+      - prod
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate HTML
+        run: |
+          npm install --global htmlhint@latest --silent
+          htmlhint "**/*.html" --config .htmlhintrc 2>/dev/null || htmlhint "**/*.html"
+        continue-on-error: false
