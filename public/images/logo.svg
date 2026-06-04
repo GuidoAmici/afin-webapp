@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 175 140" width="175" height="140" role="img" aria-label="Afin SRL">
+  <title>Afin SRL</title>
+
+  <!-- Icon mark: 3 overlapping organic blobs + 5-pointed star -->
+  <!-- Blob cluster centred at (52, 44) -->
+  <circle cx="38" cy="22" r="19" fill="#F07840"/>
+  <circle cx="62" cy="20" r="20" fill="#F07840"/>
+  <circle cx="70" cy="38" r="15" fill="#F07840"/>
+
+  <!-- 5-pointed star centred at (52, 38); outer r=14, inner r=5.5 -->
+  <polygon
+    points="52,24 55.23,33.55 65.31,33.67 57.23,39.70 60.23,49.33 52,43.5 43.77,49.33 46.77,39.70 38.69,33.67 48.77,33.55"
+    fill="#E8641A"
+  />
+
+  <!-- Logotype: "afin" bold orange + "srl" regular gray, shared baseline -->
+  <text x="7" y="128" font-family="'DM Sans', 'Nunito', 'Segoe UI', Arial, sans-serif">
+    <tspan font-size="52" font-weight="700" fill="#E8641A">afin</tspan><tspan font-size="33" font-weight="400" fill="#9E9E9E">srl</tspan>
+  </text>
+</svg>
