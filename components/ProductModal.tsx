@@ -21,10 +21,6 @@ export default function ProductModal({ product, onClose, onSelectRelated }: Prop
     .slice(0, 3)
 
   useEffect(() => {
-    setImgIndex(0)
-  }, [product.id])
-
-  useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
       if (e.key === 'ArrowLeft') setImgIndex(i => Math.max(0, i - 1))

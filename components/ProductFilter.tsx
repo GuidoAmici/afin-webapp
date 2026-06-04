@@ -81,6 +81,7 @@ export default function ProductFilter() {
 
       {selectedProduct && (
         <ProductModal
+          key={selectedProduct.id}
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           onSelectRelated={setSelectedProduct}

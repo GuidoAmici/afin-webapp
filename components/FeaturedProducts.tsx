@@ -49,6 +49,7 @@ export default function FeaturedProducts({ products }: Props) {
 
       {selectedProduct && (
         <ProductModal
+          key={selectedProduct.id}
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           onSelectRelated={setSelectedProduct}

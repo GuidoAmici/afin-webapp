@@ -7,7 +7,10 @@ export default function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
 
   // Antes de montar, isDark=false garantiza que servidor y cliente rendericen el mismo ícono
   const isDark = mounted && resolvedTheme === 'dark'
