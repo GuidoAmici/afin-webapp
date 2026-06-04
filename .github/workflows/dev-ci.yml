@@ -9,8 +9,30 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    name: Lint HTML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar htmlhint
+        run: npm install --global htmlhint@latest --silent
+
+      - name: Lint HTML
+        run: htmlhint "**/*.html"
+
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build imagen Docker
+        run: docker build -t afin-website:ci .
+
   playwright:
     name: Playwright tests
+    needs: [lint, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +59,8 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  merge-to-staging:
-    name: Merge dev → staging
+  merge-to-stg:
+    name: Merge dev → stg
     needs: playwright
     runs-on: ubuntu-latest
     steps:
@@ -52,7 +74,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge dev → staging
+      - name: Merge dev → stg
         run: |
           git checkout stg
           git merge origin/dev --no-ff -m "chore: auto-merge dev → stg [skip ci]"
