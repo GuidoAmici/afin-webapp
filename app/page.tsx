@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import Image from 'next/image'
 import { PRODUCTS } from '@/lib/products'
+import FeaturedProducts from '@/components/FeaturedProducts'
 
 export const metadata: Metadata = {
   title: 'Afin SRL — Fábrica de tapas y envases plásticos',
@@ -89,23 +89,7 @@ export default function HomePage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
             </Link>
           </div>
-          <div className="product-grid">
-            {featured.map(product => (
-              <article key={product.id} className="product-card">
-                <div className="product-card-image">
-                  <Image src={product.image} alt={product.name} width={280} height={100} style={{ objectFit: 'contain', padding: '8px', height: '100px', width: '100%' }} />
-                </div>
-                <div className="product-card-body">
-                  <p className="product-card-cat">{product.categoryLabel}</p>
-                  <h3 className="product-card-name">{product.name}</h3>
-                </div>
-                <div className="product-card-footer">
-                  <span className="product-card-link">Ver detalle →</span>
-                  <span className={`badge badge-${product.badge}`}>{product.badge === 'stock' ? 'En stock' : 'Consultar'}</span>
-                </div>
-              </article>
-            ))}
-          </div>
+          <FeaturedProducts products={featured} />
         </div>
       </section>
 

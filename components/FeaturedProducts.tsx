@@ -1,0 +1,59 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+import { Product } from '@/lib/products'
+import ProductModal from './ProductModal'
+
+interface Props {
+  products: Product[]
+}
+
+export default function FeaturedProducts({ products }: Props) {
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+
+  return (
+    <>
+      <div className="product-grid">
+        {products.map(product => (
+          <article
+            key={product.id}
+            className="product-card"
+            onClick={() => setSelectedProduct(product)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && setSelectedProduct(product)}
+          >
+            <div className="product-card-image">
+              <Image
+                src={product.image}
+                alt={product.name}
+                width={280}
+                height={160}
+                style={{ objectFit: 'cover', height: '160px', width: '100%' }}
+              />
+            </div>
+            <div className="product-card-body">
+              <p className="product-card-cat">{product.categoryLabel}</p>
+              <h3 className="product-card-name">{product.name}</h3>
+            </div>
+            <div className="product-card-footer">
+              <span className="product-card-link">Ver detalle →</span>
+              <span className={`badge badge-${product.badge}`}>
+                {product.badge === 'stock' ? 'En stock' : 'Consultar'}
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {selectedProduct && (
+        <ProductModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onSelectRelated={setSelectedProduct}
+        />
+      )}
+    </>
+  )
+}
