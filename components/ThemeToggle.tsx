@@ -1,11 +1,19 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 
 export default function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
 
-  const isDark = resolvedTheme === 'dark'
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
+  // Antes de montar, isDark=false garantiza que servidor y cliente rendericen el mismo ícono
+  const isDark = mounted && resolvedTheme === 'dark'
 
   return (
     <button
@@ -13,7 +21,6 @@ export default function ThemeToggle() {
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       title={isDark ? 'Modo claro' : 'Modo oscuro'}
       aria-label="Cambiar tema"
-      suppressHydrationWarning
     >
       {isDark ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
