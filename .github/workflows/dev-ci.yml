@@ -1,4 +1,4 @@
-name: Dev CI — Playwright + Auto-merge a staging
+name: Dev CI — Playwright + Auto-merge a stg
 
 on:
   push:
@@ -54,6 +54,6 @@ jobs:
 
       - name: Merge dev → staging
         run: |
-          git checkout staging
-          git merge origin/dev --no-ff -m "chore: auto-merge dev → staging [skip ci]"
-          git push origin staging
+          git checkout stg
+          git merge origin/dev --no-ff -m "chore: auto-merge dev → stg [skip ci]"
+          git push origin stg
