@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint:
     name: ESLint
@@ -99,7 +102,7 @@ jobs:
       - name: Merge dev → stg
         run: |
           git checkout stg
-          git merge origin/dev --no-ff -m "chore: auto-merge dev → stg [skip ci]"
+          git merge origin/dev --no-ff -m "chore: auto-merge dev → stg"
           git push origin stg
 
   deploy-stg:
