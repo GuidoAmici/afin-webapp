@@ -1,9 +1,12 @@
-name: Release Please
+name: Release Please (manual)
+
+# Este workflow se disparó originalmente en push a stg, pero GITHUB_TOKEN
+# no puede triggerear otros workflows. La automatización real está en
+# dev-ci.yml (job release-please, corre después del merge a stg).
+# Este workflow existe solo para disparos manuales si es necesario.
 
 on:
-  push:
-    branches:
-      - stg
+  workflow_dispatch:
 
 permissions:
   contents: write
