@@ -1,4 +1,4 @@
-name: Dev CI — Playwright + Auto-merge a stg
+name: Dev CI — lint + build + Playwright + Auto-merge a stg
 
 on:
   push:
@@ -10,25 +10,28 @@ permissions:
 
 jobs:
   lint:
-    name: Lint HTML
+    name: ESLint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Instalar htmlhint
-        run: npm install --global htmlhint@latest --silent
-
-      - name: Lint HTML
-        run: htmlhint "**/*.html"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
 
   build:
-    name: Docker build
+    name: next build (type-check + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build imagen Docker
-        run: docker build -t afin-website:ci .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
 
   playwright:
     name: Playwright tests
@@ -36,20 +39,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Instalar browsers de Playwright
-        run: npx playwright install --with-deps chromium
-
-      - name: Ejecutar tests
-        run: npx playwright test
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
 
       - name: Subir reporte
         if: always()
