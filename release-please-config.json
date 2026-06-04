@@ -1,0 +1,16 @@
+{
+  "release-type": "node",
+  "target-branch": "prod",
+  "changelog-sections": [
+    { "type": "feat",     "section": "✨ Novedades"      },
+    { "type": "fix",      "section": "🐛 Correcciones"   },
+    { "type": "perf",     "section": "⚡ Rendimiento"    },
+    { "type": "refactor", "section": "♻️ Refactors"      },
+    { "type": "chore",    "section": "🔧 Mantenimiento", "hidden": false },
+    { "type": "ci",       "section": "👷 CI/CD",         "hidden": true  },
+    { "type": "docs",     "section": "📝 Docs",          "hidden": true  }
+  ],
+  "packages": {
+    ".": {}
+  }
+}
