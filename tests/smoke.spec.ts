@@ -24,7 +24,7 @@ test('navegación principal es visible', async ({ page }) => {
 
 test('filtro de productos funciona', async ({ page }) => {
   await page.goto('/productos')
-  await page.getByRole('button', { name: /frascos/i }).click()
+  await page.getByLabel('Filtrar por categoría').getByRole('button', { name: /frascos/i }).click()
   await expect(page.getByText('4 productos encontrados')).toBeVisible()
 })
 
