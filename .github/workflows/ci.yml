@@ -6,6 +6,9 @@ on:
       - stg
       - prod
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ci:
     name: lint + type-check
