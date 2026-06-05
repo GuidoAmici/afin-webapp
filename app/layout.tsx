@@ -12,12 +12,15 @@ const dmSans = DM_Sans({
   display: 'swap',
 })
 
+// NEXT_PUBLIC_SITE_URL se configura en Vercel por entorno:
+//   staging:    https://stg.afinsrl.com.ar
+//   production: https://afinsrl.com.ar
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://afinsrl.com.ar')
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'https://afinsrl.com.ar'
-  ),
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'Afin SRL — Fábrica de tapas y envases plásticos',
     template: '%s — Afin SRL',
@@ -31,6 +34,12 @@ export const metadata: Metadata = {
     siteName: 'Afin SRL',
     locale: 'es_AR',
     type: 'website',
+    images: [{
+      url: '/images/og-image.jpg',
+      width: 1200,
+      height: 630,
+      alt: 'Afin SRL — Tapas, cierres y envases plásticos',
+    }],
   },
 }
 
