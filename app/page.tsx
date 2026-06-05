@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
 import { PRODUCTS } from '@/lib/products'
 import FeaturedProducts from '@/components/FeaturedProducts'
 
@@ -66,11 +67,14 @@ export default function HomePage() {
           </div>
           <div className="hero-visual">
             <div className="hero-product-frame">
-              <svg width="120" height="120" viewBox="0 0 120 120" fill="none" aria-hidden="true">
-                <rect x="30" y="10" width="60" height="20" rx="8" fill="rgba(255,255,255,0.35)" />
-                <rect x="20" y="30" width="80" height="80" rx="12" fill="rgba(255,255,255,0.35)" />
-              </svg>
-              <span className="hero-placeholder-label">Foto de producto</span>
+              <Image
+                src="/images/hero-productos.jpg"
+                alt="Frascos y tapas plásticas fabricados por Afin SRL"
+                width={600}
+                height={280}
+                className="hero-product-img"
+                priority
+              />
             </div>
           </div>
         </div>
