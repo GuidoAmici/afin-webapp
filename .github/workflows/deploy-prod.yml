@@ -1,9 +1,14 @@
-name: Deploy prod → Vercel
+name: Release — test + promote stg → prod
 
+# Dispara cuando el PR de Release Please se mergea a stg
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
-      - prod
+      - stg
+
+permissions:
+  contents: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -11,9 +16,14 @@ env:
 jobs:
   test:
     name: Lint + Playwright (vars producción)
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(github.head_ref, 'release-please--branches--stg')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: stg
 
       - uses: actions/setup-node@v4
         with:
@@ -58,11 +68,15 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: Vercel production (prod)
+    name: Deploy Vercel + Promote stg → prod
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: stg
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -88,3 +102,12 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Merge stg → prod
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
+          git push origin prod
