@@ -68,15 +68,23 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: Deploy Vercel + Promote stg → prod
+    name: Promote stg → prod + Deploy Vercel
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: stg
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge stg → prod
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
+          git push origin prod
 
       - uses: actions/setup-node@v4
         with:
@@ -102,12 +110,3 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Merge stg → prod
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout prod
-          git pull origin prod
-          git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
-          git push origin prod
