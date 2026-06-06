@@ -1,3 +1,6 @@
 {
-  "ignoreCommand": "! git log -1 --pretty=%ae | grep -q 'github-actions\\[bot\\]'"
+  "ignoreCommand": "! git log -1 --pretty=%ae | grep -q 'github-actions\\[bot\\]'",
+  "git": {
+    "deploymentEnabled": false
+  }
 }
