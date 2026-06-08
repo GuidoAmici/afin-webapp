@@ -6,7 +6,7 @@ import type { Category, Product } from '@/lib/products'
 import ProductModal from './ProductModal'
 
 function normalize(s: string) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
 interface Props {
@@ -132,13 +132,15 @@ export default function ProductFilter({ categories, products }: Props) {
 
           <div className="products-grid">
             {filtered.map(product => (
-              <article
+              <div
                 key={product.id}
                 className="product-card"
                 onClick={() => setSelectedProduct(product)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && setSelectedProduct(product)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedProduct(product) }
+                }}
               >
                 <div className="product-card-image">
                   <Image
@@ -160,7 +162,7 @@ export default function ProductFilter({ categories, products }: Props) {
                     {product.badge === 'stock' ? 'En stock' : 'Consultar'}
                   </span>
                 </div>
-              </article>
+              </div>
             ))}
           </div>
         </div>

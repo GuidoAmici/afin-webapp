@@ -4,7 +4,7 @@ import { getProducts, getCategories } from '@/lib/products'
 
 export const metadata: Metadata = {
   title: 'Productos',
-  description: 'Catálogo completo de tapas, cierres, frascos, envases y accesorios plásticos de Afin SRL.',
+  description: 'Catálogo completo de tapas, cierres, frascos, envases y accesorios plásticos de AFIN srl.',
 }
 
 export default async function ProductosPage() {

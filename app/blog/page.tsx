@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Blog',
-  description: 'Novedades e información del sector de envases y tapas plásticas. Blog de Afin SRL.',
+  description: 'Novedades e información del sector de envases y tapas plásticas. Blog de AFIN srl.',
 }
 
 export default function BlogPage() {

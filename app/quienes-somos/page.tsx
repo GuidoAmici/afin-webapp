@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Quiénes Somos',
-  description: 'Afin SRL es una empresa argentina dedicada a la fabricación de tapas, cierres y envases plásticos con más de 20 años de experiencia.',
+  description: 'AFIN srl es una empresa argentina dedicada a la fabricación de tapas, cierres y envases plásticos con más de 20 años de experiencia.',
 }
 
 const WHY_US = [
@@ -44,7 +44,7 @@ export default function QuienesSomosPage() {
           <div className="about-content">
             <p className="section-label">Quiénes Somos</p>
             <h2>Fábrica de tapas y envases</h2>
-            <p>Afin SRL es una empresa argentina dedicada a la fabricación de tapas, cierres y envases plásticos. Atendemos a la industria cosmética, farmacéutica y de perfumería con productos de calidad y plazos cumplidos.</p>
+            <p>AFIN srl es una empresa argentina dedicada a la fabricación de tapas, cierres y envases plásticos. Atendemos a la industria cosmética, farmacéutica y de perfumería con productos de calidad y plazos cumplidos.</p>
             <p>Nuestro equipo de trabajo, nuestra maquinaria actualizada y nuestra experiencia en el sector nos permiten ofrecer soluciones a medida para cada cliente.</p>
             <div className="about-stats">
               <div><div className="stat-number">20+</div><div className="stat-label">Años de experiencia</div></div>
@@ -66,7 +66,7 @@ export default function QuienesSomosPage() {
 
       <section className="why-us">
         <div className="container">
-          <h2>¿Por qué elegir Afin SRL?</h2>
+          <h2>¿Por qué elegir AFIN srl?</h2>
           <div className="why-grid">
             {WHY_US.map(({ icon, title, desc }) => (
               <div key={title} className="why-card">

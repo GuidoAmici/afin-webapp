@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import type { Product } from '@/lib/products'
 
@@ -13,23 +13,47 @@ interface Props {
 
 const BADGE_LABEL: Record<string, string> = { stock: 'En stock', consult: 'Consultar', new: 'Nuevo' }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])'
+
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   const images = product.images?.length ? product.images : [product.image]
   const related = relatedProducts.slice(0, 3)
 
   useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement
+    closeButtonRef.current?.focus()
+
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowLeft') setImgIndex(i => Math.max(0, i - 1))
-      if (e.key === 'ArrowRight') setImgIndex(i => Math.min(images.length - 1, i + 1))
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'ArrowLeft') { setImgIndex(i => Math.max(0, i - 1)); return }
+      if (e.key === 'ArrowRight') { setImgIndex(i => Math.min(images.length - 1, i + 1)); return }
+      if (e.key === 'Tab') {
+        const modal = modalRef.current
+        if (!modal) return
+        const focusable = Array.from(modal.querySelectorAll<HTMLElement>(FOCUSABLE))
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last?.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first?.focus()
+        }
+      }
     }
+
     document.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
+
     return () => {
       document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
+      previousFocus?.focus()
     }
   }, [onClose, images.length])
 
@@ -39,12 +63,16 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
     <div
       className="product-modal-overlay"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={product.name}
     >
-      <div className="product-modal" onClick={e => e.stopPropagation()}>
-        <button className="product-modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
+      <div
+        ref={modalRef}
+        className="product-modal"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-product-title"
+      >
+        <button ref={closeButtonRef} className="product-modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
 
         <div className="product-modal-body">
           {/* Carrusel */}
@@ -93,7 +121,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
             <p className="product-card-cat">{product.categoryLabel}</p>
 
             <div className="product-modal-title-row">
-              <h2 className="product-modal-name">{product.name}</h2>
+              <h2 id="modal-product-title" className="product-modal-name">{product.name}</h2>
               <span className={`badge badge-${product.badge}`}>{BADGE_LABEL[product.badge]}</span>
             </div>
 
@@ -134,15 +162,17 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
                       onClick={() => onSelectRelated?.(rel)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && onSelectRelated?.(rel)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectRelated?.(rel) }
+                      }}
                     >
                       <div className="product-modal-related-img">
                         <Image
                           src={rel.image}
                           alt={rel.name}
                           width={80}
-                          height={80}
-                          style={{ objectFit: 'contain', width: '100%', height: '100%', padding: '4px' }}
+                          height={64}
+                          style={{ objectFit: 'contain', padding: '4px' }}
                         />
                       </div>
                       <p className="product-modal-related-name">{rel.name}</p>

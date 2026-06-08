@@ -57,7 +57,7 @@ export async function getProducts(): Promise<Product[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('products')
-    .select(`
+    .select<string, ProductRow>(`
       id, name, category_id, subcategory_id, image, images, badge, price_retail, price_wholesale, description,
       category:categories!category_id(label),
       subcategory:subcategories!subcategory_id(label)
@@ -67,7 +67,7 @@ export async function getProducts(): Promise<Product[]> {
 
   if (error) throw error
 
-  return (data as unknown as ProductRow[]).map(p => ({
+  return (data ?? []).map(p => ({
     id: p.id,
     name: p.name,
     category: p.category_id,
@@ -87,12 +87,12 @@ export async function getCategories(products: Product[]): Promise<Category[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('categories')
-    .select('id, label, sort_order, subcategories(id, category_id, label, sort_order)')
+    .select<string, CategoryRow>('id, label, sort_order, subcategories(id, category_id, label, sort_order)')
     .order('sort_order')
 
   if (error) throw error
 
-  return (data as unknown as CategoryRow[]).map(cat => ({
+  return (data ?? []).map(cat => ({
     id: cat.id,
     label: cat.label,
     count: products.filter(p => p.category === cat.id).length,

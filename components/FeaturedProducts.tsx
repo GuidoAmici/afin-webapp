@@ -16,13 +16,15 @@ export default function FeaturedProducts({ products }: Props) {
     <>
       <div className="product-grid">
         {products.map(product => (
-          <article
+          <div
             key={product.id}
             className="product-card"
             onClick={() => setSelectedProduct(product)}
             role="button"
             tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && setSelectedProduct(product)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedProduct(product) }
+            }}
           >
             <div className="product-card-image">
               <Image
@@ -43,7 +45,7 @@ export default function FeaturedProducts({ products }: Props) {
                 {product.badge === 'stock' ? 'En stock' : 'Consultar'}
               </span>
             </div>
-          </article>
+          </div>
         ))}
       </div>
 

@@ -3,7 +3,7 @@ import ContactForm from '@/components/ContactForm'
 
 export const metadata: Metadata = {
   title: 'Contacto',
-  description: 'Contactá a Afin SRL para consultas, presupuestos y pedidos. Respondemos a la brevedad.',
+  description: 'Contactá a AFIN srl para consultas, presupuestos y pedidos. Respondemos a la brevedad.',
 }
 
 export default function ContactoPage() {
