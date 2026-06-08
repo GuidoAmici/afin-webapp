@@ -1,3 +1,5 @@
+BEGIN;
+
 INSERT INTO public.categories (id, label, sort_order) VALUES
   ('tapas',          'Tapas · Cierres',    0),
   ('dosificadores',  'Dosificadores',      1),
@@ -21,3 +23,5 @@ INSERT INTO public.subcategories (id, category_id, label, sort_order) VALUES
   ('medicion',    'accesorios',    'Medición',            0),
   ('rattan',      'accesorios',    'Varillas de rattan',  1),
   ('engrimpar',   'accesorios',    'Para engrimpar',      2);
+
+COMMIT;

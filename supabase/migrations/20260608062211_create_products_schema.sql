@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE TABLE public.categories (
   id         text    PRIMARY KEY,
   label      text    NOT NULL,
@@ -32,3 +34,5 @@ CREATE TABLE public.products (
 );
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
