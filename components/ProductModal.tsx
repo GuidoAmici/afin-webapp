@@ -2,23 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { Product, PRODUCTS } from '@/lib/products'
+import type { Product } from '@/lib/products'
 
 interface Props {
   product: Product
+  relatedProducts: Product[]
   onClose: () => void
   onSelectRelated?: (product: Product) => void
 }
 
 const BADGE_LABEL: Record<string, string> = { stock: 'En stock', consult: 'Consultar', new: 'Nuevo' }
 
-export default function ProductModal({ product, onClose, onSelectRelated }: Props) {
+export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
 
   const images = product.images?.length ? product.images : [product.image]
-  const related = PRODUCTS
-    .filter(p => p.category === product.category && p.id !== product.id)
-    .slice(0, 3)
+  const related = relatedProducts.slice(0, 3)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

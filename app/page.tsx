@@ -1,14 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
-import { PRODUCTS } from '@/lib/products'
+import { getProducts } from '@/lib/products'
 import FeaturedProducts from '@/components/FeaturedProducts'
 
 export const metadata: Metadata = {
   title: 'Afin SRL — Fábrica de tapas y envases plásticos',
 }
 
-const FEATURED_IDS = ['tapas-valvulas-15mm', 'tapas-valvulas-20mm', 'tapas-rosca-24-410', 'bombas-vaporizadoras']
+const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
 
 const CLIENTS = [
   { initial: 'L', name: 'Lidherma',            desc: 'Cosmética & Dermatología' },
@@ -42,8 +42,9 @@ const WHY_US = [
   },
 ]
 
-export default function HomePage() {
-  const featured = PRODUCTS.filter(p => FEATURED_IDS.includes(p.id))
+export default async function HomePage() {
+  const products = await getProducts()
+  const featured = products.filter(p => FEATURED_IDS.includes(p.id))
 
   return (
     <main id="main-content">

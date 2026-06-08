@@ -21,17 +21,17 @@ jobs:
       startsWith(github.head_ref, 'release-please--branches--stg')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: stg
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
 
       - name: Restaurar node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: node_modules
           key: node-modules-${{ hashFiles('package-lock.json') }}
@@ -48,7 +48,7 @@ jobs:
 
       - name: Restaurar browsers de Playwright
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
@@ -61,22 +61,26 @@ jobs:
 
       - name: Subir reporte
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report-prod
           path: playwright-report/
           retention-days: 7
 
-  deploy:
-    name: Promote stg → prod + Deploy Vercel
+  promote-to-prod:
+    name: Promote stg → prod
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
+          token: ${{ steps.app-token.outputs.token }}
       - name: Merge stg → prod
         run: |
           git config user.name "github-actions[bot]"
@@ -86,25 +90,80 @@ jobs:
           git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
           git push origin prod
 
-      - uses: actions/setup-node@v4
+  db-migration-prod:
+    name: DB migration prod
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: stg
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Aplicar migraciones a prod
+        run: supabase db push --project-id myzngskhjnrmnonrksmj
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+
+  rollback-prod:
+    name: Rollback prod
+    needs: [promote-to-prod, db-migration-prod]
+    if: |
+      always() && (
+        (needs.promote-to-prod.result == 'success' && needs.db-migration-prod.result == 'failure') ||
+        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Revertir merge stg → prod
+        if: needs.promote-to-prod.result == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git revert HEAD -m 1 --no-edit
+          git push origin prod
+      - name: "ERROR: migración aplicada pero merge falló — intervención manual requerida"
+        if: needs.db-migration-prod.result == 'success' && needs.promote-to-prod.result == 'failure'
+        run: |
+          echo "::error::La migración se aplicó a prod pero el merge de git falló. El schema de DB y el código están desincronizados. Intervención manual requerida."
+          exit 1
+
+  deploy-prod:
+    name: Deploy prod → Vercel
+    needs: [promote-to-prod, db-migration-prod]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: prod
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
-
       - run: npm install -g vercel@latest
-
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Deploy
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:

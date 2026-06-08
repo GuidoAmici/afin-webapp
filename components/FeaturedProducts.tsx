@@ -51,6 +51,7 @@ export default function FeaturedProducts({ products }: Props) {
         <ProductModal
           key={selectedProduct.id}
           product={selectedProduct}
+          relatedProducts={products.filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id)}
           onClose={() => setSelectedProduct(null)}
           onSelectRelated={setSelectedProduct}
         />
