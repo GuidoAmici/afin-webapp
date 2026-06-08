@@ -102,7 +102,9 @@ jobs:
         with:
           version: latest
       - name: Aplicar migraciones a prod
-        run: supabase db push --project-id myzngskhjnrmnonrksmj
+        run: |
+          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
+          supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
