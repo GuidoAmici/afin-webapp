@@ -22,24 +22,31 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Afin SRL — Fábrica de tapas y envases plásticos',
-    template: '%s — Afin SRL',
+    default: 'AFIN srl — Fábrica de tapas y envases plásticos',
+    template: '%s — AFIN srl',
   },
   description:
-    'Afin SRL fabrica tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería. Fabricación 100% argentina.',
+    'AFIN srl fabrica tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería. Fabricación 100% argentina.',
   openGraph: {
-    title: 'Afin SRL — Fábrica de tapas y envases plásticos',
+    title: 'AFIN srl — Fábrica de tapas y envases plásticos',
     description:
       'Fabricamos tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería. Calidad nacional, atención personalizada.',
-    siteName: 'Afin SRL',
+    siteName: 'AFIN srl',
     locale: 'es_AR',
     type: 'website',
     images: [{
       url: '/images/og-image.jpg',
       width: 1200,
       height: 630,
-      alt: 'Afin SRL — Tapas, cierres y envases plásticos',
+      alt: 'AFIN srl — Tapas, cierres y envases plásticos',
     }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AFIN srl — Fábrica de tapas y envases plásticos',
+    description:
+      'Fabricamos tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería. Calidad nacional, atención personalizada.',
+    images: ['/images/og-image.jpg'],
   },
 }
 

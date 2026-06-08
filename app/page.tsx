@@ -5,7 +5,7 @@ import { getProducts } from '@/lib/products'
 import FeaturedProducts from '@/components/FeaturedProducts'
 
 export const metadata: Metadata = {
-  title: 'Afin SRL — Fábrica de tapas y envases plásticos',
+  title: { absolute: 'AFIN srl — Fábrica de tapas y envases plásticos' },
 }
 
 const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
@@ -70,7 +70,7 @@ export default async function HomePage() {
             <div className="hero-product-frame">
               <Image
                 src="/images/hero-productos.jpg"
-                alt="Frascos y tapas plásticas fabricados por Afin SRL"
+                alt="Frascos y tapas plásticas fabricados por AFIN srl"
                 width={600}
                 height={280}
                 className="hero-product-img"
@@ -99,10 +99,10 @@ export default async function HomePage() {
       </section>
 
       {/* CLIENTS MARQUEE */}
-      <section className="clients-section" aria-label="Empresas que confían en Afin SRL">
+      <section className="clients-section" aria-label="Empresas que confían en AFIN srl">
         <div className="clients-header">
           <p className="section-label">Confían en nosotros</p>
-          <h2>Empresas que eligen Afin SRL</h2>
+          <h2>Empresas que eligen AFIN srl</h2>
         </div>
         <div className="marquee-wrapper">
           <div className="marquee-fade-left" aria-hidden="true" />
@@ -124,7 +124,7 @@ export default async function HomePage() {
       {/* WHY US */}
       <section className="why-us">
         <div className="container">
-          <h2>¿Por qué elegir Afin SRL?</h2>
+          <h2>¿Por qué elegir AFIN srl?</h2>
           <div className="why-grid">
             {WHY_US.map(({ icon, title, desc }) => (
               <div key={title} className="why-card">

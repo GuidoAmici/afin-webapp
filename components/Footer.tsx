@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="footer-inner">
         <div className="footer-grid">
           <div>
-            <Image src="/images/logo.png" alt="Afin SRL" className="footer-logo" width={120} height={44} />
+            <Image src="/images/logo.png" alt="AFIN srl" className="footer-logo" width={120} height={44} />
             <p className="footer-tagline">
               Fábrica argentina de tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería.
             </p>
@@ -38,16 +38,15 @@ export default function Footer() {
 
           <div>
             <p className="footer-nav-title">Productos</p>
-            <Link href="/productos#tapas"      className="footer-nav-link">Tapas de Engrimpe</Link>
-            <Link href="/productos#tapas"      className="footer-nav-link">Tapas a Rosca</Link>
-            <Link href="/productos#envases"    className="footer-nav-link">Envases Plásticos</Link>
+            <Link href="/productos#tapas"      className="footer-nav-link">Tapas y Cierres</Link>
             <Link href="/productos#frascos"    className="footer-nav-link">Frascos</Link>
+            <Link href="/productos#envases"    className="footer-nav-link">Envases Plásticos</Link>
             <Link href="/productos#dispensers" className="footer-nav-link">Bombas Vaporizadoras</Link>
           </div>
         </div>
 
         <div className="footer-bottom">
-          <span>© 2024 Afin S.R.L. Todos los derechos reservados.</span>
+          <span>© {new Date().getFullYear()} AFIN srl Todos los derechos reservados.</span>
           <span>Fabricación 100% Argentina</span>
         </div>
       </div>
