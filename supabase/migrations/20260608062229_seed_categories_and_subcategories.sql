@@ -5,7 +5,8 @@ INSERT INTO public.categories (id, label, sort_order) VALUES
   ('dosificadores',  'Dosificadores',      1),
   ('frascos',        'Frascos completos',  2),
   ('envases',        'Envases',            3),
-  ('accesorios',     'Accesorios',         4);
+  ('accesorios',     'Accesorios',         4)
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.subcategories (id, category_id, label, sort_order) VALUES
   ('engrimpe-15', 'tapas',         'Engrimpe 15 mm',      0),
@@ -22,6 +23,7 @@ INSERT INTO public.subcategories (id, category_id, label, sort_order) VALUES
   ('plastico',    'envases',       'De plástico',         1),
   ('medicion',    'accesorios',    'Medición',            0),
   ('rattan',      'accesorios',    'Varillas de rattan',  1),
-  ('engrimpar',   'accesorios',    'Para engrimpar',      2);
+  ('engrimpar',   'accesorios',    'Para engrimpar',      2)
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

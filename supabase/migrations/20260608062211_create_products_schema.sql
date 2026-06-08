@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE public.categories (
+CREATE TABLE IF NOT EXISTS public.categories (
   id         text    PRIMARY KEY,
   label      text    NOT NULL,
   sort_order integer NOT NULL DEFAULT 0
@@ -8,7 +8,7 @@ CREATE TABLE public.categories (
 
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE public.subcategories (
+CREATE TABLE IF NOT EXISTS public.subcategories (
   id          text    PRIMARY KEY,
   category_id text    NOT NULL REFERENCES public.categories(id),
   label       text    NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE public.subcategories (
 
 ALTER TABLE public.subcategories ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE public.products (
+CREATE TABLE IF NOT EXISTS public.products (
   id              text    PRIMARY KEY,
   name            text    NOT NULL,
   category_id     text    NOT NULL REFERENCES public.categories(id),

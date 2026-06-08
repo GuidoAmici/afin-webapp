@@ -83,6 +83,7 @@ INSERT INTO public.products (id, name, category_id, subcategory_id, image, image
 -- Tapas rosca
 ('tapa-precinto',     'Tapa Precinto Blanca','tapas', 'rosca-28', '/images/products/tapa-precinto-blanca.jpg', NULL, 'stock', NULL, NULL, NULL,                                          0, true),
 ('tapa-difusor',      'Tapa Difusor',        'tapas', 'rosca-24', '/images/products/tapa-difusor.jpg',         NULL, 'stock', NULL, NULL, 'Tapa para difusor de varillas. Medida de rosca: 24/410.', 0, true),
-('tapa-difusor-ciega','Tapa Difusor Ciega',  'tapas', 'rosca-24', '/images/products/tapa-difusor-ciega.jpg',   NULL, 'stock', NULL, NULL, 'Tapa ciega para difusor de varillas. Medida de rosca: 24/410.', 1, true);
+('tapa-difusor-ciega','Tapa Difusor Ciega',  'tapas', 'rosca-24', '/images/products/tapa-difusor-ciega.jpg',   NULL, 'stock', NULL, NULL, 'Tapa ciega para difusor de varillas. Medida de rosca: 24/410.', 1, true)
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
