@@ -113,7 +113,7 @@ jobs:
       - name: Merge dev → stg
         run: |
           git checkout stg
-          git merge origin/dev --no-ff -m "chore: auto-merge dev → stg"
+          git merge origin/dev --no-ff -X theirs -m "chore: auto-merge dev → stg"
           git push origin stg
 
   release-please:
