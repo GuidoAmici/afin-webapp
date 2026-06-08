@@ -75,6 +75,11 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npm ci
+      - name: Cargar variables de entorno desde Vercel
+        run: npm install -g vercel@latest && vercel env pull .env.local --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       - name: Instalar browsers (solo si no hay caché)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
@@ -113,7 +118,7 @@ jobs:
 
   release-please:
     name: Release PR → stg
-    needs: merge-to-stg
+    needs: db-migration-stg
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
@@ -121,8 +126,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: stg
 
-  deploy-stg:
-    name: Deploy stg → Vercel
+  db-migration-stg:
+    name: DB migration stg
     needs: merge-to-stg
     runs-on: ubuntu-latest
     steps:
@@ -137,6 +142,15 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+
+  deploy-stg:
+    name: Deploy stg → Vercel
+    needs: db-migration-stg
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: stg
       - uses: actions/setup-node@v6
         with:
           node-version: 24

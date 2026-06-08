@@ -67,8 +67,8 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  deploy:
-    name: Promote stg → prod + Deploy Vercel
+  promote-to-prod:
+    name: Promote stg → prod
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -81,7 +81,6 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
-
       - name: Merge stg → prod
         run: |
           git config user.name "github-actions[bot]"
@@ -91,6 +90,14 @@ jobs:
           git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
           git push origin prod
 
+  db-migration-prod:
+    name: DB migration prod
+    needs: promote-to-prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: prod
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -100,25 +107,29 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
 
+  deploy-prod:
+    name: Deploy prod → Vercel
+    needs: db-migration-prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: prod
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
-
       - run: npm install -g vercel@latest
-
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Deploy
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
