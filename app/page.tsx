@@ -1,14 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
-import { PRODUCTS } from '@/lib/products'
+import { getProducts } from '@/lib/products'
 import FeaturedProducts from '@/components/FeaturedProducts'
 
 export const metadata: Metadata = {
-  title: 'Afin SRL — Fábrica de tapas y envases plásticos',
+  title: { absolute: 'AFIN srl — Fábrica de tapas y envases plásticos' },
 }
 
-const FEATURED_IDS = ['tapas-valvulas-15mm', 'tapas-valvulas-20mm', 'tapas-rosca-24-410', 'bombas-vaporizadoras']
+const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
 
 const CLIENTS = [
   { initial: 'L', name: 'Lidherma',            desc: 'Cosmética & Dermatología' },
@@ -42,8 +42,9 @@ const WHY_US = [
   },
 ]
 
-export default function HomePage() {
-  const featured = PRODUCTS.filter(p => FEATURED_IDS.includes(p.id))
+export default async function HomePage() {
+  const products = await getProducts()
+  const featured = products.filter(p => FEATURED_IDS.includes(p.id))
 
   return (
     <main id="main-content">
@@ -69,7 +70,7 @@ export default function HomePage() {
             <div className="hero-product-frame">
               <Image
                 src="/images/hero-productos.jpg"
-                alt="Frascos y tapas plásticas fabricados por Afin SRL"
+                alt="Frascos y tapas plásticas fabricados por AFIN srl"
                 width={600}
                 height={280}
                 className="hero-product-img"
@@ -98,10 +99,10 @@ export default function HomePage() {
       </section>
 
       {/* CLIENTS MARQUEE */}
-      <section className="clients-section" aria-label="Empresas que confían en Afin SRL">
+      <section className="clients-section" aria-label="Empresas que confían en AFIN srl">
         <div className="clients-header">
           <p className="section-label">Confían en nosotros</p>
-          <h2>Empresas que eligen Afin SRL</h2>
+          <h2>Empresas que eligen AFIN srl</h2>
         </div>
         <div className="marquee-wrapper">
           <div className="marquee-fade-left" aria-hidden="true" />
@@ -123,7 +124,7 @@ export default function HomePage() {
       {/* WHY US */}
       <section className="why-us">
         <div className="container">
-          <h2>¿Por qué elegir Afin SRL?</h2>
+          <h2>¿Por qué elegir AFIN srl?</h2>
           <div className="why-grid">
             {WHY_US.map(({ icon, title, desc }) => (
               <div key={title} className="why-card">

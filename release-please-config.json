@@ -1,6 +1,6 @@
 {
   "release-type": "node",
-  "target-branch": "prod",
+  "target-branch": "stg",
   "changelog-sections": [
     { "type": "feat",     "section": "✨ Novedades"      },
     { "type": "fix",      "section": "🐛 Correcciones"   },

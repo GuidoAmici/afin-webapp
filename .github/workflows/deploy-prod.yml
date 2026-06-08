@@ -1,36 +1,171 @@
-name: Deploy prod → Vercel
+name: Release — test + promote stg → prod
 
+# Dispara cuando el PR de Release Please se mergea a stg
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
-      - prod
+      - stg
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  deploy:
-    name: Vercel production (prod)
+  test:
+    name: Lint + Playwright (vars producción)
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(github.head_ref, 'release-please--branches--stg')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          ref: stg
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
 
-      - run: npm install -g vercel@latest
+      - name: Restaurar node_modules
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
 
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+
+      - name: Cargar variables de producción en .env.local
+        run: npm install -g vercel@latest && vercel env pull .env.local --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Restaurar browsers de Playwright
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar browsers (solo si no hay caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - run: npx playwright test
+
+      - name: Subir reporte
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-prod
+          path: playwright-report/
+          retention-days: 7
+
+  promote-to-prod:
+    name: Promote stg → prod
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Merge stg → prod
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
+          git push origin prod
+
+  db-migration-prod:
+    name: DB migration prod
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: stg
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+      - name: Aplicar migraciones a prod
+        run: |
+          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
+          supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+
+  rollback-prod:
+    name: Rollback prod
+    needs: [promote-to-prod, db-migration-prod]
+    if: |
+      always() && (
+        (needs.promote-to-prod.result == 'success' && needs.db-migration-prod.result == 'failure') ||
+        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Revertir merge stg → prod
+        if: needs.promote-to-prod.result == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git revert HEAD -m 1 --no-edit
+          git push origin prod
+      - name: "ERROR: migración aplicada pero merge falló — intervención manual requerida"
+        if: needs.db-migration-prod.result == 'success' && needs.promote-to-prod.result == 'failure'
+        run: |
+          echo "::error::La migración se aplicó a prod pero el merge de git falló. El schema de DB y el código están desincronizados. Intervención manual requerida."
+          exit 1
+
+  deploy-prod:
+    name: Deploy prod → Vercel
+    needs: [promote-to-prod, db-migration-prod]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: prod
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g vercel@latest
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Deploy
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
