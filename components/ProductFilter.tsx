@@ -2,22 +2,29 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { CATEGORIES, PRODUCTS, TOTAL_PRODUCTS, ALL_SUBCATEGORIES, Product } from '@/lib/products'
+import type { Category, Product } from '@/lib/products'
 import ProductModal from './ProductModal'
 
 function normalize(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-export default function ProductFilter() {
+interface Props {
+  categories: Category[]
+  products: Product[]
+}
+
+export default function ProductFilter({ categories, products }: Props) {
   const [activeCategory, setActiveCategory]       = useState<string | null>(null)
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct]     = useState<Product | null>(null)
   const [query, setQuery]                         = useState('')
 
+  const allSubcategories = categories.flatMap(c => c.subcategories)
+
   const q = normalize(query.trim())
 
-  const filtered = PRODUCTS.filter(p => {
+  const filtered = products.filter(p => {
     const matchesSearch = !q || [p.name, p.categoryLabel, p.subcategoryLabel, p.description ?? '']
       .some(field => normalize(field).includes(q))
     const matchesCat = !activeSubcategory
@@ -29,9 +36,9 @@ export default function ProductFilter() {
   const activeLabel = query.trim()
     ? `Resultados para "${query.trim()}"`
     : activeSubcategory
-      ? ALL_SUBCATEGORIES.find(s => s.id === activeSubcategory)?.label
+      ? allSubcategories.find(s => s.id === activeSubcategory)?.label
       : activeCategory
-        ? CATEGORIES.find(c => c.id === activeCategory)?.label
+        ? categories.find(c => c.id === activeCategory)?.label
         : 'Todos los productos'
 
   function selectCategory(catId: string) {
@@ -82,12 +89,12 @@ export default function ProductFilter() {
             onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }}
           >
             <span className="filter-label">Todos los productos</span>
-            <span className="filter-count">{TOTAL_PRODUCTS}</span>
+            <span className="filter-count">{products.length}</span>
           </button>
 
           <div className="sidebar-divider" />
 
-          {CATEGORIES.map(cat => (
+          {categories.map(cat => (
             <div key={cat.id}>
               <button
                 className={`filter-btn${activeCategory === cat.id && !activeSubcategory ? ' active' : ''}`}
@@ -163,6 +170,7 @@ export default function ProductFilter() {
         <ProductModal
           key={selectedProduct.id}
           product={selectedProduct}
+          relatedProducts={products.filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id)}
           onClose={() => setSelectedProduct(null)}
           onSelectRelated={setSelectedProduct}
         />

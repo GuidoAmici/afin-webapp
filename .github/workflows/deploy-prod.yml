@@ -91,6 +91,15 @@ jobs:
           git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
           git push origin prod
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Aplicar migraciones a prod
+        run: supabase db push --project-id myzngskhjnrmnonrksmj
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+
       - uses: actions/setup-node@v6
         with:
           node-version: 24
