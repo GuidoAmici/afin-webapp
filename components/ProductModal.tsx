@@ -141,8 +141,8 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
                           src={rel.image}
                           alt={rel.name}
                           width={80}
-                          height={64}
-                          style={{ objectFit: 'contain', padding: '4px' }}
+                          height={80}
+                          style={{ objectFit: 'contain', width: '100%', height: '100%', padding: '4px' }}
                         />
                       </div>
                       <p className="product-modal-related-name">{rel.name}</p>
