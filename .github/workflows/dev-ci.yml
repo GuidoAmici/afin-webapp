@@ -12,6 +12,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: ESLint
@@ -52,6 +56,7 @@ jobs:
           restore-keys: nextjs-${{ hashFiles('package-lock.json') }}-
       - run: npm ci
       - run: npm run build
+      - run: npm run type-check
 
   playwright:
     name: Playwright tests
@@ -121,9 +126,14 @@ jobs:
     needs: db-migration-stg
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: googleapis/release-please-action@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           target-branch: stg
 
   db-migration-stg:
@@ -149,6 +159,7 @@ jobs:
     name: Deploy stg → Vercel
     needs: db-migration-stg
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -169,7 +180,29 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       - name: Deploy
-        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          set -euo pipefail
+          RESULT=$(vercel deploy --prebuilt --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Verificar deployment READY
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            [ "$STATE" = "READY" ] && exit 0
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el deployment stg no llegó a READY en 5 minutos" && exit 1

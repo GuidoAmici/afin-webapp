@@ -13,6 +13,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Lint + Playwright (vars producción)
@@ -61,7 +65,7 @@ jobs:
 
       - name: Subir reporte
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-prod
           path: playwright-report/
@@ -97,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: stg
+          ref: prod
       - uses: supabase/setup-cli@v2
         with:
           version: latest
@@ -115,7 +119,8 @@ jobs:
     if: |
       always() && (
         (needs.promote-to-prod.result == 'success' && needs.db-migration-prod.result == 'failure') ||
-        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'success')
+        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'success') ||
+        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'failure')
       )
     runs-on: ubuntu-latest
     steps:
@@ -142,11 +147,17 @@ jobs:
         run: |
           echo "::error::La migración se aplicó a prod pero el merge de git falló. El schema de DB y el código están desincronizados. Intervención manual requerida."
           exit 1
+      - name: "ERROR: doble falla — intervención manual requerida"
+        if: needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'failure'
+        run: |
+          echo "::error::Tanto el merge como la migración fallaron. Estado indeterminado. Revisar manualmente."
+          exit 1
 
   deploy-prod:
     name: Deploy prod → Vercel
     needs: [promote-to-prod, db-migration-prod]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -167,7 +178,30 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          set -euo pipefail
+          RESULT=$(vercel deploy --prebuilt --prod --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
+          echo "url=$(echo "$RESULT" | jq -r '.url')" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Verificar deployment READY
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            [ "$STATE" = "READY" ] && exit 0
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el deployment no llegó a READY en 5 minutos" && exit 1
