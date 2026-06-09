@@ -6,6 +6,7 @@ on:
     types: [closed]
     branches:
       - stg
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,8 +22,9 @@ jobs:
   test:
     name: Lint + Playwright (vars producción)
     if: >
-      github.event.pull_request.merged == true &&
-      startsWith(github.head_ref, 'release-please--branches--stg')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.head_ref, 'release-please--branches--stg'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
