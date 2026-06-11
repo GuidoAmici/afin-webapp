@@ -570,7 +570,7 @@ textarea { resize: vertical; min-height: 100px; }
   .about-section, .products-page, .contact-section, .site-footer,
   .page-hero { padding-left: 20px; padding-right: 20px; }
 
-  .header-nav, .header-actions .btn-primary { display: none; }
+  .header-nav, .header-actions > .btn-primary { display: none; }
   .mobile-toggle { display: flex; }
 
   .hero-inner { grid-template-columns: 1fr; gap: 32px; }
