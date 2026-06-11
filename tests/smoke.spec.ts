@@ -31,6 +31,7 @@ test('filtro de productos funciona', async ({ page }) => {
 
 test('página de contacto muestra datos de la empresa y formulario de newsletter', async ({ page }) => {
   await page.goto('/contacto')
-  await expect(page.getByLabel('Tu correo electrónico')).toBeVisible()
-  await expect(page.getByRole('button', { name: /suscribirme/i })).toBeVisible()
+  const main = page.locator('#main-content')
+  await expect(main.getByLabel('Tu correo electrónico')).toBeVisible()
+  await expect(main.getByRole('button', { name: /suscribirme/i })).toBeVisible()
 })
