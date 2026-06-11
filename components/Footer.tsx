@@ -1,10 +1,19 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import NewsletterForm from '@/components/NewsletterForm'
 
 export default function Footer() {
   return (
     <footer className="site-footer">
       <div className="footer-inner">
+        <div className="footer-newsletter">
+          <div className="footer-newsletter-text">
+            <p>Suscribite al newsletter</p>
+            <p>Productos nuevos, promociones y artículos del blog.</p>
+          </div>
+          <NewsletterForm />
+        </div>
+
         <div className="footer-grid">
           <div>
             <Image src="/images/logo.png" alt="AFIN srl" className="footer-logo" width={120} height={44} />
