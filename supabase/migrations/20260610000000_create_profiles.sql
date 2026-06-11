@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id           UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   nombre       TEXT        NOT NULL,
   empresa      TEXT,
@@ -24,6 +24,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS profiles_updated_at ON public.profiles;
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -42,6 +43,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -49,10 +51,12 @@ CREATE TRIGGER on_auth_user_created
 -- RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Cada usuario lee su propio perfil" ON public.profiles;
 CREATE POLICY "Cada usuario lee su propio perfil"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Cada usuario actualiza su propio perfil" ON public.profiles;
 CREATE POLICY "Cada usuario actualiza su propio perfil"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id)
@@ -61,6 +65,7 @@ CREATE POLICY "Cada usuario actualiza su propio perfil"
     role = (SELECT role FROM public.profiles WHERE id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Empleados leen todos los perfiles" ON public.profiles;
 CREATE POLICY "Empleados leen todos los perfiles"
   ON public.profiles FOR SELECT
   USING (
