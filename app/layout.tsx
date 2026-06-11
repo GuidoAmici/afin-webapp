@@ -1,9 +1,6 @@
 import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
-import WhatsAppButton from '@/components/WhatsAppButton'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -55,10 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" suppressHydrationWarning>
       <body className={dmSans.className}>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <Header />
           {children}
-          <Footer />
-          <WhatsAppButton />
         </ThemeProvider>
       </body>
     </html>

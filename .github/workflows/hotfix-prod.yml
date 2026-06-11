@@ -1,0 +1,205 @@
+name: Hotfix — test + merge to prod + back-merge dev
+
+on:
+  push:
+    branches:
+      - 'hotfix/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Lint + type-check + Playwright (vars producción)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Restaurar node_modules
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run type-check
+
+      - name: Cargar variables de producción en .env.local
+        run: npm install -g vercel@latest && vercel env pull .env.local --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Restaurar browsers de Playwright
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar browsers (solo si no hay caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - run: npx playwright test
+
+      - name: Subir reporte
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-hotfix
+          path: playwright-report/
+          retention-days: 7
+
+  merge-to-prod:
+    name: Merge hotfix/* → prod
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Merge hotfix → prod
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git merge origin/${{ github.ref_name }} --no-ff -m "chore: hotfix → prod (${{ github.ref_name }})"
+          git push origin prod
+
+  deploy-prod:
+    name: Deploy prod → Vercel
+    needs: merge-to-prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: prod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          set -euo pipefail
+          RESULT=$(vercel deploy --prebuilt --prod --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
+          echo "url=$(echo "$RESULT" | jq -r '.url')" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Verificar deployment READY
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            [ "$STATE" = "READY" ] && exit 0
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el deployment no llegó a READY en 5 minutos" && exit 1
+
+  back-merge-dev:
+    name: Back-merge hotfix → dev
+    needs: deploy-prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Merge hotfix → dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout dev
+          git pull origin dev
+          git merge origin/${{ github.ref_name }} --no-ff -m "chore: back-merge ${{ github.ref_name }} → dev"
+          git push origin dev
+
+  rollback-prod:
+    name: Rollback prod
+    needs: [merge-to-prod, deploy-prod]
+    if: |
+      always() &&
+      needs.merge-to-prod.result == 'success' &&
+      needs.deploy-prod.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Revertir merge hotfix → prod
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout prod
+          git pull origin prod
+          git revert HEAD -m 1 --no-edit
+          git push origin prod
