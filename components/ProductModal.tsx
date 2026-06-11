@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import type { Product } from '@/lib/products'
+import { useCart } from '@/lib/cart'
 
 interface Props {
   product: Product
@@ -17,8 +18,10 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input, textarea, select, [ta
 
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
+  const [added, setAdded] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const { add } = useCart()
 
   const images = product.images?.length ? product.images : [product.image]
   const related = relatedProducts.slice(0, 3)
@@ -142,14 +145,33 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
               </div>
             </div>
 
-            <a
-              href={`https://wa.me/5491122521639?text=${waMessage}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary product-modal-cta"
-            >
-              Consultar por WhatsApp
-            </a>
+            {product.badge === 'stock' && (
+              <button
+                className="btn-primary product-modal-cta"
+                onClick={() => {
+                  add({ productId: product.id, productName: product.name, image: product.image, unitPrice: product.priceRetail })
+                  setAdded(true)
+                  setTimeout(() => setAdded(false), 2000)
+                }}
+              >
+                {added ? '✓ Agregado al pedido' : 'Agregar al pedido'}
+              </button>
+            )}
+            {product.badge === 'consult' && (
+              <a
+                href={`https://wa.me/5491122521639?text=${waMessage}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary product-modal-cta"
+              >
+                Consultar por WhatsApp
+              </a>
+            )}
+            {product.badge === 'new' && (
+              <button className="btn-primary product-modal-cta" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                Próximamente
+              </button>
+            )}
 
             {related.length > 0 && (
               <div className="product-modal-related">
