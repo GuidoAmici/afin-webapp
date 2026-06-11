@@ -25,7 +25,34 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  // Refresca la sesión en cada request
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const pathname = request.nextUrl.pathname
+
+  // Proteger /empleados — requiere auth + role empleado
+  if (pathname.startsWith('/empleados')) {
+    if (!user) {
+      const loginUrl = new URL('/auth/login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role !== 'empleado') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+  }
+
+  // Redirigir usuarios ya logueados lejos de /auth/*
+  if (user && pathname.startsWith('/auth/') && pathname !== '/auth/callback') {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
 
   return supabaseResponse
 }

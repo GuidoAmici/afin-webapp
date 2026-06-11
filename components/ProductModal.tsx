@@ -19,9 +19,18 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input, textarea, select, [ta
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
   const [added, setAdded] = useState(false)
+  const [qty, setQtyRaw] = useState(1)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const { add } = useCart()
+
+  function setQty(val: number) { setQtyRaw(Math.max(1, val)) }
+
+  function handleQtyInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const n = parseInt(e.target.value, 10)
+    if (!isNaN(n)) setQty(n)
+    else if (e.target.value === '') setQtyRaw(1)
+  }
 
   const images = product.images?.length ? product.images : [product.image]
   const related = relatedProducts.slice(0, 3)
@@ -146,16 +155,31 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
             </div>
 
             {product.badge === 'stock' && (
-              <button
-                className="btn-primary product-modal-cta"
-                onClick={() => {
-                  add({ productId: product.id, productName: product.name, image: product.image, unitPrice: product.priceRetail })
-                  setAdded(true)
-                  setTimeout(() => setAdded(false), 2000)
-                }}
-              >
-                {added ? '✓ Agregado al pedido' : 'Agregar al pedido'}
-              </button>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                  <button onClick={() => setQty(qty - 1)} style={qtyBtnStyle} aria-label="Restar">−</button>
+                  <input
+                    type="number"
+                    min={1}
+                    value={qty}
+                    onChange={handleQtyInput}
+                    onBlur={() => setQty(qty)}
+                    style={{ width: 48, textAlign: 'center', border: 'none', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', padding: '8px 4px', fontSize: 14, fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--fg-1)', outline: 'none' }}
+                  />
+                  <button onClick={() => setQty(qty + 1)} style={qtyBtnStyle} aria-label="Sumar">+</button>
+                </div>
+                <button
+                  className="btn-primary product-modal-cta"
+                  style={{ flex: 1, margin: 0 }}
+                  onClick={() => {
+                    add({ productId: product.id, productName: product.name, image: product.image, unitPrice: product.priceRetail }, qty)
+                    setAdded(true)
+                    setTimeout(() => setAdded(false), 2000)
+                  }}
+                >
+                  {added ? '✓ Agregado' : 'Agregar al pedido'}
+                </button>
+              </div>
             )}
             {product.badge === 'consult' && (
               <a
@@ -208,4 +232,10 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
       </div>
     </div>
   )
+}
+
+const qtyBtnStyle: React.CSSProperties = {
+  width: 36, height: 36, border: 'none', background: 'var(--bg-surface)',
+  cursor: 'pointer', fontSize: 16, color: 'var(--fg-2)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
 }

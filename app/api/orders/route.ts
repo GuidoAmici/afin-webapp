@@ -25,29 +25,66 @@ export async function POST(request: Request) {
   // Verificar perfil completo
   const { data: profile } = await supabase
     .from('profiles')
-    .select('nombre, empresa, telefono, direccion, localidad')
+    .select('nombre, empresa, telefono, direccion, localidad, cuit, dni, tipo_facturacion')
     .eq('id', user.id)
     .single()
 
-  if (!profile?.telefono || !profile?.direccion || !profile?.localidad) {
+  const tipo = (profile?.tipo_facturacion ?? 'personal') as 'personal' | 'empresa'
+  const contactoOk = profile?.telefono && profile?.direccion && profile?.localidad
+  const factOk = tipo === 'empresa' ? (profile?.empresa && profile?.cuit) : profile?.dni
+  if (!contactoOk || !factOk) {
     return NextResponse.json({ error: 'perfil_incompleto' }, { status: 422 })
   }
 
-  // Crear pedido
-  const { data: order, error: orderError } = await supabase
+  // Buscar pedido pendiente existente (status = 'nuevo')
+  const { data: existingOrder } = await supabase
     .from('orders')
-    .insert({ user_id: user.id, notes: notes ?? null })
     .select('id')
-    .single()
+    .eq('user_id', user.id)
+    .eq('status', 'nuevo')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (orderError || !order) {
-    return NextResponse.json({ error: 'Error al crear el pedido' }, { status: 500 })
+  let orderId: string
+  let wasUpdated = false
+
+  if (existingOrder) {
+    orderId = existingOrder.id
+    wasUpdated = true
+
+    // Reemplazar ítems del pedido existente
+    const { error: deleteError } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('order_id', orderId)
+
+    if (deleteError) {
+      return NextResponse.json({ error: 'Error al actualizar el pedido' }, { status: 500 })
+    }
+
+    await supabase
+      .from('orders')
+      .update({ notes: notes ?? null })
+      .eq('id', orderId)
+  } else {
+    // Crear pedido nuevo
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({ user_id: user.id, notes: notes ?? null })
+      .select('id')
+      .single()
+
+    if (orderError || !order) {
+      return NextResponse.json({ error: 'Error al crear el pedido' }, { status: 500 })
+    }
+    orderId = order.id
   }
 
-  // Insertar items
+  // Insertar ítems
   const { error: itemsError } = await supabase.from('order_items').insert(
     items.map(item => ({
-      order_id: order.id,
+      order_id: orderId,
       product_id: item.productId,
       quantity: item.quantity,
       unit_price: item.unitPrice ?? null,
@@ -55,16 +92,18 @@ export async function POST(request: Request) {
   )
 
   if (itemsError) {
-    await supabase.from('orders').delete().eq('id', order.id)
+    if (!wasUpdated) await supabase.from('orders').delete().eq('id', orderId)
     return NextResponse.json({ error: 'Error al guardar los productos' }, { status: 500 })
   }
 
   // Notificación WhatsApp a Andrés
   const resumen = items.map(i => `• ${i.quantity}x ${i.productName}`).join('\n')
   const clienteNombre = [profile.nombre, profile.empresa].filter(Boolean).join(' — ')
+  const emoji = wasUpdated ? '🔄' : '🛒'
+  const accion = wasUpdated ? 'Pedido actualizado' : 'Pedido nuevo'
   await notifyCallMeBot(
-    `🛒 Pedido nuevo\n${clienteNombre}\n${profile.telefono}\n\n${resumen}\n\nVer: afinsrl.com.ar/empleados/pedidos/${order.id}`
+    `${emoji} ${accion}\n${clienteNombre}\n${profile.telefono}\n\n${resumen}\n\nVer: afinsrl.com.ar/empleados/pedidos/${orderId}`
   )
 
-  return NextResponse.json({ orderId: order.id })
+  return NextResponse.json({ orderId, wasUpdated })
 }

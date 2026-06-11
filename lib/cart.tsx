@@ -13,7 +13,7 @@ export interface CartItem {
 interface CartContextValue {
   items: CartItem[]
   count: number
-  add: (item: Omit<CartItem, 'quantity'>) => void
+  add: (item: Omit<CartItem, 'quantity'>, qty?: number) => void
   remove: (productId: string) => void
   setQty: (productId: string, qty: number) => void
   clear: () => void
@@ -24,27 +24,30 @@ const CartContext = createContext<CartContextValue | null>(null)
 const STORAGE_KEY = 'afin_cart'
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    if (typeof window === 'undefined') return []
+  const [items, setItems] = useState<CartItem[]>([])
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      return stored ? JSON.parse(stored) : []
-    } catch { return [] }
-  })
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (stored) setItems(JSON.parse(stored))
+    } catch {}
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items])
 
-  function add(item: Omit<CartItem, 'quantity'>) {
+  function add(item: Omit<CartItem, 'quantity'>, qty = 1) {
+    const amount = Math.max(1, qty)
     setItems(prev => {
       const existing = prev.find(i => i.productId === item.productId)
       if (existing) {
         return prev.map(i =>
-          i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i
+          i.productId === item.productId ? { ...i, quantity: i.quantity + amount } : i
         )
       }
-      return [...prev, { ...item, quantity: 1 }]
+      return [...prev, { ...item, quantity: amount }]
     })
   }
 

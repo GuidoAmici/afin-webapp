@@ -51,6 +51,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Prevent Dark Reader from injecting attributes that cause hydration mismatches */}
+        <meta name="darkreader-lock" />
+      </head>
       <body className={dmSans.className}>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
           <CartProvider>
