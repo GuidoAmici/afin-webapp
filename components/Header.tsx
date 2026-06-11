@@ -5,6 +5,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
+import CartButton from './CartButton'
+import AccountButton from './AccountButton'
 
 const NAV_LINKS = [
   { href: '/', label: 'Inicio' },
@@ -137,6 +139,8 @@ export default function Header() {
 
           <div className="header-actions">
             <ThemeToggle />
+            <AccountButton />
+            <CartButton />
             <Link href="/contacto" className="btn-primary">Contacto</Link>
             <button
               ref={mobileTriggerRef}

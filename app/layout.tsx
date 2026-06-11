@@ -1,9 +1,7 @@
 import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
-import WhatsAppButton from '@/components/WhatsAppButton'
+import { CartProvider } from '@/lib/cart'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -53,12 +51,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Prevent Dark Reader from injecting attributes that cause hydration mismatches */}
+        <meta name="darkreader-lock" />
+      </head>
       <body className={dmSans.className}>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <Header />
-          {children}
-          <Footer />
-          <WhatsAppButton />
+          <CartProvider>
+            {children}
+          </CartProvider>
         </ThemeProvider>
       </body>
     </html>

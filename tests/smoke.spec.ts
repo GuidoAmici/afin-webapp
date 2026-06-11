@@ -29,11 +29,9 @@ test('filtro de productos funciona', async ({ page }) => {
   await expect(page.getByText('4 productos encontrados')).toBeVisible()
 })
 
-test('formulario de contacto muestra éxito', async ({ page }) => {
+test('página de contacto muestra datos de la empresa y formulario de newsletter', async ({ page }) => {
   await page.goto('/contacto')
-  await page.fill('#nombre', 'Test')
-  await page.fill('#email', 'test@test.com')
-  await page.fill('#mensaje', 'Consulta de prueba')
-  await page.click('button[type="submit"]')
-  await expect(page.getByText('¡Consulta enviada!')).toBeVisible()
+  const main = page.locator('#main-content')
+  await expect(main.getByLabel('Tu correo electrónico')).toBeVisible()
+  await expect(main.getByRole('button', { name: /suscribirme/i })).toBeVisible()
 })
