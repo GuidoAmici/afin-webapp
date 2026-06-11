@@ -35,3 +35,11 @@ test('página de contacto muestra datos de la empresa y formulario de newsletter
   await expect(main.getByLabel('Tu correo electrónico')).toBeVisible()
   await expect(main.getByRole('button', { name: /suscribirme/i })).toBeVisible()
 })
+
+test('carrito vacío muestra botón "Ver productos" en mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /ver carrito/i }).click()
+  const dialog = page.getByRole('dialog', { name: 'Carrito' })
+  await expect(dialog.getByRole('link', { name: /ver productos/i })).toBeVisible()
+})
