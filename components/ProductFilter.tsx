@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { useSearchParams } from 'next/navigation'
 import type { Category, Product } from '@/lib/products'
 import ProductModal from './ProductModal'
+import { SearchIcon } from './icons'
 
 function normalize(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -15,12 +17,27 @@ interface Props {
 }
 
 export default function ProductFilter({ categories, products }: Props) {
-  const [activeCategory, setActiveCategory]       = useState<string | null>(null)
-  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
-  const [selectedProduct, setSelectedProduct]     = useState<Product | null>(null)
-  const [query, setQuery]                         = useState('')
+  const searchParams = useSearchParams()
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [query, setQuery] = useState('')
 
   const allSubcategories = categories.flatMap(c => c.subcategories)
+
+  // La URL es la fuente de verdad para cat/sub: filtros compartibles y
+  // navegables con atrás/adelante. Valores desconocidos se ignoran.
+  const rawSub = searchParams.get('sub')
+  const activeSub = allSubcategories.find(s => s.id === rawSub) ?? null
+  const rawCat = searchParams.get('cat')
+  const activeCategory = activeSub?.parentId ?? (categories.some(c => c.id === rawCat) ? rawCat : null)
+  const activeSubcategory = activeSub?.id ?? null
+
+  function applyFilter(cat: string | null, sub: string | null) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (cat) params.set('cat', cat); else params.delete('cat')
+    if (sub) params.set('sub', sub); else params.delete('sub')
+    const qs = params.toString()
+    window.history.pushState(null, '', qs ? `?${qs}` : window.location.pathname)
+  }
 
   const q = normalize(query.trim())
 
@@ -43,29 +60,24 @@ export default function ProductFilter({ categories, products }: Props) {
 
   function selectCategory(catId: string) {
     if (activeCategory === catId) {
-      setActiveCategory(null)
-      setActiveSubcategory(null)
+      applyFilter(null, null)
     } else {
-      setActiveCategory(catId)
-      setActiveSubcategory(null)
+      applyFilter(catId, null)
     }
   }
 
   function selectSubcategory(subId: string, parentId: string) {
     if (activeSubcategory === subId) {
-      setActiveSubcategory(null)
+      applyFilter(parentId, null)
     } else {
-      setActiveCategory(parentId)
-      setActiveSubcategory(subId)
+      applyFilter(parentId, subId)
     }
   }
 
   return (
     <>
       <div className="products-search-bar">
-        <svg className="products-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
+        <SearchIcon size={18} className="products-search-icon" />
         <input
           type="search"
           placeholder="Buscar producto… (ej: Tapa Flor, bomba 15, vantax)"
@@ -86,7 +98,7 @@ export default function ProductFilter({ categories, products }: Props) {
 
           <button
             className={`filter-btn${!activeCategory ? ' active' : ''}`}
-            onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }}
+            onClick={() => applyFilter(null, null)}
           >
             <span className="filter-label">Todos los productos</span>
             <span className="filter-count">{products.length}</span>

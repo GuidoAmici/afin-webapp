@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 
 export type BadgeVariant = 'stock' | 'consult' | 'new'
 
@@ -54,7 +54,7 @@ type CategoryRow = {
 }
 
 export async function getProducts(): Promise<Product[]> {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from('products')
     .select<string, ProductRow>(`
@@ -83,16 +83,22 @@ export async function getProducts(): Promise<Product[]> {
   }))
 }
 
-export async function getCategories(products: Product[]): Promise<Category[]> {
-  const supabase = await createClient()
+async function getCategoryRows(): Promise<CategoryRow[]> {
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from('categories')
     .select<string, CategoryRow>('id, label, sort_order, subcategories(id, category_id, label, sort_order)')
     .order('sort_order')
 
   if (error) throw error
+  return data ?? []
+}
 
-  return (data ?? []).map(cat => ({
+/** Productos y categorías (con conteos) en una sola pasada, consultados en paralelo. */
+export async function getCatalog(): Promise<{ products: Product[]; categories: Category[] }> {
+  const [products, categoryRows] = await Promise.all([getProducts(), getCategoryRows()])
+
+  const categories = categoryRows.map(cat => ({
     id: cat.id,
     label: cat.label,
     count: products.filter(p => p.category === cat.id).length,
@@ -105,4 +111,6 @@ export async function getCategories(products: Product[]): Promise<Category[]> {
         count: products.filter(p => p.subcategory === sub.id).length,
       })),
   }))
+
+  return { products, categories }
 }

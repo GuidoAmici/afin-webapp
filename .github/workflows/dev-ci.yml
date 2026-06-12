@@ -1,4 +1,4 @@
-name: Dev CI — lint + build + preview + Playwright + stg
+name: Dev CI — lint + preview + migration + E2E + promote stg
 
 on:
   push:
@@ -34,37 +34,14 @@ jobs:
       - run: npm ci
       - run: npm run lint
 
-  build:
-    name: next build (type-check + build)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - name: Restaurar node_modules
-        uses: actions/cache@v5
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
-      - name: Restaurar caché de Next.js
-        uses: actions/cache@v5
-        with:
-          path: .next/cache
-          key: nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.css') }}
-          restore-keys: nextjs-${{ hashFiles('package-lock.json') }}-
-      - run: npm ci
-      - run: npm run build
-      - run: npm run type-check
-
   deploy-preview:
-    name: Deploy preview dev → Vercel
-    needs: [lint, build]
+    name: Build + Deploy preview dev → Vercel
+    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       url: ${{ steps.verify.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.id }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -115,9 +92,28 @@ jobs:
           done
           echo "::error::Timeout: el deployment preview no llegó a READY en 5 minutos" && exit 1
 
-  playwright:
-    name: Playwright tests (preview)
+  db-test-migration:
+    name: DB migration stg
     needs: deploy-preview
+    runs-on: ubuntu-latest
+    environment: stg
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+      - name: Aplicar migraciones a stg
+        run: |
+          supabase link --project-ref wbsvxdquzvsawmjoiwat --password "$SUPABASE_DB_PASSWORD"
+          supabase migration repair --status reverted 20260611152734 20260611163147 20260611170310 20260611172247 20260611173633 2>/dev/null || true
+          supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+
+  playwright:
+    name: Playwright E2E (preview URL + stg DB)
+    needs: [deploy-preview, db-test-migration]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -176,82 +172,23 @@ jobs:
           git merge origin/dev --no-ff -X theirs -m "chore: auto-merge dev → stg"
           git push origin stg
 
-  db-migration-stg:
-    name: DB migration stg
-    needs: merge-to-stg
+  promote-stg:
+    name: Promote preview → stg.afinsrl.com.ar
+    needs: [deploy-preview, merge-to-stg]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: stg
-      - uses: supabase/setup-cli@v2
-        with:
-          version: latest
-      - name: Aplicar migraciones a stg
-        run: |
-          supabase link --project-ref wbsvxdquzvsawmjoiwat --password "$SUPABASE_DB_PASSWORD"
-          # Reparar registros huérfanos en el historial remoto (timestamps de dev vs. locales redondeados)
-          supabase migration repair --status reverted 20260611152734 20260611163147 20260611170310 20260611172247 20260611173633 2>/dev/null || true
-          supabase db push
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
-
-  deploy-stg:
-    name: Deploy stg → Vercel
-    needs: db-migration-stg
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: stg
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
       - run: npm install -g vercel@latest
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Build
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Deploy
-        id: deploy
+      - name: Asignar alias stg al deployment preview
         run: |
-          set -euo pipefail
-          RESULT=$(vercel deploy --prebuilt --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
-          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
-            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
-            exit 1
-          fi
-          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
+          vercel alias set ${{ needs.deploy-preview.outputs.deployment_id }} stg.afinsrl.com.ar \
+            --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Verificar deployment READY
-        run: |
-          for i in $(seq 1 20); do
-            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
-              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
-            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
-            echo "Intento $i — estado: $STATE"
-            [ "$STATE" = "READY" ] && exit 0
-            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
-            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
-            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
-            sleep 15
-          done
-          echo "::error::Timeout: el deployment stg no llegó a READY en 5 minutos" && exit 1
 
   release-please:
     name: Release PR → stg
-    needs: deploy-stg
+    needs: promote-stg
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5

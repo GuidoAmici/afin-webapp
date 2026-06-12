@@ -3,15 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { formatCuit } from '@/lib/format'
+import { FieldInput, ChoiceToggle } from '@/components/ui/form'
+import { UserIcon as UserGlyph, SignOutIcon as SignOutGlyph } from '@/components/icons'
 
 type TipoFacturacion = 'personal' | 'empresa'
-
-function formatCuit(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2) return d
-  if (d.length <= 10) return `${d.slice(0, 2)}-${d.slice(2)}`
-  return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`
-}
 
 export default function CuentaPage() {
   const [ready,         setReady]         = useState(false)
@@ -221,13 +217,13 @@ export default function CuentaPage() {
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Tipo de datos fiscales</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(['personal', 'empresa'] as TipoFacturacion[]).map(t => (
-                    <button key={t} type="button" onClick={() => setTipo(t)} style={{ flex: 1, maxWidth: 140, padding: '8px 0', fontSize: 13, fontWeight: 500, border: `1px solid ${tipo === t ? 'var(--orange-600)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', background: tipo === t ? 'color-mix(in srgb, var(--orange-600) 10%, transparent)' : 'var(--bg-surface)', color: tipo === t ? 'var(--orange-600)' : 'var(--fg-2)', cursor: 'pointer' }}>
-                      {t === 'personal' ? 'Personal' : 'Empresa'}
-                    </button>
-                  ))}
+                <span className="form-label" style={{ marginBottom: 5 }}>Tipo de datos fiscales</span>
+                <div style={{ maxWidth: 288 }}>
+                  <ChoiceToggle
+                    options={[{ value: 'personal', label: 'Personal' }, { value: 'empresa', label: 'Empresa' }]}
+                    value={tipo}
+                    onChange={setTipo}
+                  />
                 </div>
               </div>
 
@@ -288,20 +284,6 @@ function Section({ id, label, Icon, children }: {
 
 // ── Form helpers ──────────────────────────────────────────────────────────────
 
-function FieldInput({ label, value, onChange, placeholder, inputMode, disabled }: {
-  label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
-  disabled?: boolean
-}) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} inputMode={inputMode} disabled={disabled}
-        style={{ ...inputStyle, opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : undefined }} />
-    </div>
-  )
-}
-
 function SaveRow({ loading, msg, onSave, disabled }: {
   loading: boolean; msg?: { ok: boolean; text: string }; onSave: () => void; disabled?: boolean
 }) {
@@ -334,21 +316,7 @@ function CameraIcon({ size, color }: { size: number; color: string }) {
 }
 
 function UserIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
-
-function BuildingIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="2" width="16" height="20" rx="2" />
-      <path d="M9 22v-4h6v4" /><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01" />
-    </svg>
-  )
+  return <UserGlyph size={size} style={{ color }} />
 }
 
 function SettingsIcon({ size, color }: { size: number; color: string }) {
@@ -361,13 +329,7 @@ function SettingsIcon({ size, color }: { size: number; color: string }) {
 }
 
 function SignOutIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  )
+  return <SignOutGlyph size={size} style={{ color }} />
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -387,8 +349,6 @@ const NAV_ITEMS: { id: string; label: string; Icon: IconComponent }[] = [
   { id: 'preferencias', label: 'Preferencias',           Icon: SettingsIcon },
 ]
 
-const pageStyle:  React.CSSProperties = { minHeight: '100vh', background: 'var(--bg-surface)', padding: '48px 16px 96px' }
-const h1Style:    React.CSSProperties = { fontSize: 24, fontWeight: 700, color: 'var(--fg-1)', marginBottom: 28 }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)', color: 'var(--fg-1)', outline: 'none', boxSizing: 'border-box' }
-const formGrid:   React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }
+const pageStyle: React.CSSProperties = { minHeight: '100vh', background: 'var(--bg-surface)', padding: '48px 16px 96px' }
+const h1Style:   React.CSSProperties = { fontSize: 24, fontWeight: 700, color: 'var(--fg-1)', marginBottom: 28 }
+const formGrid:  React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import type { Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
+import { useModalBehavior } from '@/lib/useModalBehavior'
 
 interface Props {
   product: Product
@@ -13,8 +14,6 @@ interface Props {
 }
 
 const BADGE_LABEL: Record<string, string> = { stock: 'En stock', consult: 'Consultar', new: 'Nuevo' }
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])'
 
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
@@ -35,39 +34,17 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
   const images = product.images?.length ? product.images : [product.image]
   const related = relatedProducts.slice(0, 3)
 
+  useModalBehavior(modalRef, onClose, { initialFocus: closeButtonRef })
+
+  // Navegación del carrusel con flechas del teclado
   useEffect(() => {
-    const previousFocus = document.activeElement as HTMLElement
-    closeButtonRef.current?.focus()
-
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
-      if (e.key === 'ArrowLeft') { setImgIndex(i => Math.max(0, i - 1)); return }
-      if (e.key === 'ArrowRight') { setImgIndex(i => Math.min(images.length - 1, i + 1)); return }
-      if (e.key === 'Tab') {
-        const modal = modalRef.current
-        if (!modal) return
-        const focusable = Array.from(modal.querySelectorAll<HTMLElement>(FOCUSABLE))
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last?.focus()
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first?.focus()
-        }
-      }
+      if (e.key === 'ArrowLeft') setImgIndex(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setImgIndex(i => Math.min(images.length - 1, i + 1))
     }
-
     document.addEventListener('keydown', handleKey)
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.removeEventListener('keydown', handleKey)
-      document.body.style.overflow = ''
-      previousFocus?.focus()
-    }
-  }, [onClose, images.length])
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [images.length])
 
   const waMessage = encodeURIComponent(`Hola! Me interesa el producto: ${product.name}`)
 
@@ -112,15 +89,14 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
                   disabled={imgIndex === images.length - 1}
                   aria-label="Imagen siguiente"
                 >›</button>
-                <div className="carousel-dots" role="tablist">
+                <div className="carousel-dots">
                   {images.map((_, i) => (
                     <button
                       key={i}
-                      role="tab"
-                      aria-selected={i === imgIndex}
                       className={`carousel-dot${i === imgIndex ? ' active' : ''}`}
                       onClick={() => setImgIndex(i)}
-                      aria-label={`Imagen ${i + 1}`}
+                      aria-label={`Ir a imagen ${i + 1}`}
+                      aria-current={i === imgIndex}
                     />
                   ))}
                 </div>
