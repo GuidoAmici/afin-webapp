@@ -6,17 +6,19 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: [['html', { open: 'never' }], ['list']],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  ...(process.env.PLAYWRIGHT_BASE_URL ? {} : {
+    webServer: {
+      command: 'npm run dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: true,
+      timeout: 60_000,
+    },
+  }),
 })
