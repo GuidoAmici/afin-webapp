@@ -3,10 +3,14 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { getProducts } from '@/lib/products'
 import FeaturedProducts from '@/components/FeaturedProducts'
+import { ArrowRightIcon, ChatIcon } from '@/components/icons'
 
 export const metadata: Metadata = {
   title: { absolute: 'AFIN srl — Fábrica de tapas y envases plásticos' },
 }
+
+// Catálogo cacheado con ISR: se regenera como mucho cada 5 minutos.
+export const revalidate = 300
 
 const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
 
@@ -58,10 +62,10 @@ export default async function HomePage() {
             <div className="hero-cta">
               <Link href="/productos" className="btn-hero-primary">
                 Ver productos
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                <ArrowRightIcon />
               </Link>
               <Link href="/contacto" className="btn-hero-ghost">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                <ChatIcon />
                 Consultar
               </Link>
             </div>
@@ -91,7 +95,7 @@ export default async function HomePage() {
             </div>
             <Link href="/productos" className="btn-primary">
               Ver todos
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+              <ArrowRightIcon />
             </Link>
           </div>
           <FeaturedProducts products={featured} />

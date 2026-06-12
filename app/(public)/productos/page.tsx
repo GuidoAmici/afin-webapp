@@ -1,15 +1,18 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import ProductFilter from '@/components/ProductFilter'
-import { getProducts, getCategories } from '@/lib/products'
+import { getCatalog } from '@/lib/products'
 
 export const metadata: Metadata = {
   title: 'Productos',
   description: 'Catálogo completo de tapas, cierres, frascos, envases y accesorios plásticos de AFIN srl.',
 }
 
+// Catálogo cacheado con ISR: se regenera como mucho cada 5 minutos.
+export const revalidate = 300
+
 export default async function ProductosPage() {
-  const products = await getProducts()
-  const categories = await getCategories(products)
+  const { products, categories } = await getCatalog()
 
   return (
     <main id="main-content">
@@ -22,7 +25,9 @@ export default async function ProductosPage() {
       </section>
 
       <section className="products-page">
-        <ProductFilter categories={categories} products={products} />
+        <Suspense>
+          <ProductFilter categories={categories} products={products} />
+        </Suspense>
       </section>
     </main>
   )

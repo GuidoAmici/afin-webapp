@@ -13,6 +13,7 @@ export interface CartItem {
 interface CartContextValue {
   items: CartItem[]
   count: number
+  ready: boolean
   add: (item: Omit<CartItem, 'quantity'>, qty?: number) => void
   remove: (productId: string) => void
   setQty: (productId: string, qty: number) => void
@@ -25,6 +26,7 @@ const STORAGE_KEY = 'afin_cart'
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     try {
@@ -32,6 +34,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored) setItems(JSON.parse(stored))
     } catch {}
+    setReady(true)
   }, [])
 
   useEffect(() => {
@@ -63,7 +66,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   function clear() { setItems([]) }
 
   return (
-    <CartContext.Provider value={{ items, count: items.reduce((s, i) => s + i.quantity, 0), add, remove, setQty, clear }}>
+    <CartContext.Provider value={{ items, count: items.reduce((s, i) => s + i.quantity, 0), ready, add, remove, setQty, clear }}>
       {children}
     </CartContext.Provider>
   )

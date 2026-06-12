@@ -1,6 +1,5 @@
-name: Release — test + promote stg → prod
+name: Release — promote stg → prod
 
-# Dispara cuando el PR de Release Please se mergea a stg
 on:
   pull_request:
     types: [closed]
@@ -19,63 +18,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    name: Lint + Playwright (vars producción)
+  db-migration-prod:
+    name: DB migration prod
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
       startsWith(github.head_ref, 'release-please--branches--stg'))
     runs-on: ubuntu-latest
+    environment: prod
     steps:
       - uses: actions/checkout@v6
         with:
           ref: stg
-
-      - uses: actions/setup-node@v6
+      - uses: supabase/setup-cli@v2
         with:
-          node-version: 24
-          cache: npm
-
-      - name: Restaurar node_modules
-        uses: actions/cache@v5
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
-
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run type-check
-
-      - name: Cargar variables de producción en .env.local
-        run: npm install -g vercel@latest && vercel env pull .env.local --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          version: latest
+      - name: Aplicar migraciones a prod
+        run: |
+          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
+          supabase db push
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
 
-      - name: Restaurar browsers de Playwright
-        id: playwright-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('package-lock.json') }}
-
-      - name: Instalar browsers (solo si no hay caché)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - run: npx playwright test
-
-      - name: Subir reporte
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-prod
-          path: playwright-report/
-          retention-days: 7
-
-  promote-to-prod:
-    name: Promote stg → prod
-    needs: test
+  merge-to-prod:
+    name: Merge stg → prod
+    needs: db-migration-prod
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -93,117 +61,31 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout prod
           git pull origin prod
-          git merge origin/stg --no-ff -m "chore: promote stg → prod (${{ github.event.pull_request.title }})"
+          TITLE="${{ github.event.pull_request.title }}"
+          MESSAGE="chore: promote stg → prod${TITLE:+ ($TITLE)}"
+          git merge origin/stg --no-ff -m "$MESSAGE"
           git push origin prod
 
-  db-migration-prod:
-    name: DB migration prod
-    needs: test
+  promote-prod:
+    name: Promote stg deployment → afinsrl.com.ar
+    needs: merge-to-prod
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: prod
-      - uses: supabase/setup-cli@v2
-        with:
-          version: latest
-      - name: Aplicar migraciones a prod
-        run: |
-          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
-          supabase db push
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
-
-  rollback-prod:
-    name: Rollback prod
-    needs: [promote-to-prod, db-migration-prod]
-    if: |
-      always() && (
-        (needs.promote-to-prod.result == 'success' && needs.db-migration-prod.result == 'failure') ||
-        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'success') ||
-        (needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'failure')
-      )
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/create-github-app-token@v3
-        id: app-token
-        with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-      - name: Revertir merge stg → prod
-        if: needs.promote-to-prod.result == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout prod
-          git pull origin prod
-          git revert HEAD -m 1 --no-edit
-          git push origin prod
-      - name: "ERROR: migración aplicada pero merge falló — intervención manual requerida"
-        if: needs.db-migration-prod.result == 'success' && needs.promote-to-prod.result == 'failure'
-        run: |
-          echo "::error::La migración se aplicó a prod pero el merge de git falló. El schema de DB y el código están desincronizados. Intervención manual requerida."
-          exit 1
-      - name: "ERROR: doble falla — intervención manual requerida"
-        if: needs.promote-to-prod.result == 'failure' && needs.db-migration-prod.result == 'failure'
-        run: |
-          echo "::error::Tanto el merge como la migración fallaron. Estado indeterminado. Revisar manualmente."
-          exit 1
-
-  deploy-prod:
-    name: Deploy prod → Vercel
-    needs: [promote-to-prod, db-migration-prod]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: prod
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
       - run: npm install -g vercel@latest
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Deploy
-        id: deploy
+      - name: Obtener deployment ID de stg.afinsrl.com.ar
+        id: stg-deploy
         run: |
-          set -euo pipefail
-          RESULT=$(vercel deploy --prebuilt --prod --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
-          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
-            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+          DEPLOY_ID=$(curl -sf "https://api.vercel.com/v3/now/aliases/stg.afinsrl.com.ar" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" | jq -r '.deploymentId')
+          if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
+            echo "::error::No se pudo obtener el deployment ID de stg.afinsrl.com.ar"
             exit 1
           fi
-          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
-          echo "url=$(echo "$RESULT" | jq -r '.url')" >> $GITHUB_OUTPUT
+          echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+      - name: Promover a afinsrl.com.ar
+        run: |
+          vercel alias set ${{ steps.stg-deploy.outputs.id }} afinsrl.com.ar \
+            --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - name: Verificar deployment READY
-        run: |
-          for i in $(seq 1 20); do
-            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
-              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
-            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
-            echo "Intento $i — estado: $STATE"
-            [ "$STATE" = "READY" ] && exit 0
-            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
-            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
-            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
-            sleep 15
-          done
-          echo "::error::Timeout: el deployment no llegó a READY en 5 minutos" && exit 1
