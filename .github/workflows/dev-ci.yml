@@ -112,7 +112,7 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
 
   playwright:
-    name: Playwright E2E (preview URL + stg DB)
+    name: Playwright E2E (preview URL + test DB)
     needs: [deploy-preview, db-test-migration]
     runs-on: ubuntu-latest
     steps:
@@ -133,6 +133,8 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npm ci
+      - name: Versión de Playwright instalada
+        run: npx playwright --version
       - name: Instalar browsers (solo si no hay caché)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium

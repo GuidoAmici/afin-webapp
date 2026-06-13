@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -77,7 +78,8 @@ export default function AccountButton() {
               onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
               {avatarUrl ? (
-                <img
+                <Image
+                  unoptimized
                   src={avatarUrl}
                   alt="Mi cuenta"
                   width={36}
