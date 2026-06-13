@@ -189,11 +189,11 @@ jobs:
             -d '{"gitBranch": null}'
       - name: Asignar alias stg al deployment preview
         run: |
-          vercel alias set ${{ needs.deploy-preview.outputs.deployment_id }} stg.afinsrl.com.ar \
-            --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          curl -sf -X POST \
+            "https://api.vercel.com/v2/deployments/${{ needs.deploy-preview.outputs.deployment_id }}/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"alias": "stg.afinsrl.com.ar"}'
 
   release-please:
     name: Release PR → stg
