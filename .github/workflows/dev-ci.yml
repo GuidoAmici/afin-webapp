@@ -183,7 +183,7 @@ jobs:
       - name: Asignar alias stg al deployment preview
         run: |
           vercel alias set ${{ needs.deploy-preview.outputs.deployment_id }} stg.afinsrl.com.ar \
-            --yes --token=${{ secrets.VERCEL_TOKEN }}
+            --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
