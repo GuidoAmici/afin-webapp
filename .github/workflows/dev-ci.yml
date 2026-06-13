@@ -180,6 +180,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: npm install -g vercel@latest
+      - name: Desvincular stg.afinsrl.com.ar de git branch
+        run: |
+          curl -sf -X PATCH \
+            "https://api.vercel.com/v9/projects/afin-website/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"gitBranch": null}'
       - name: Asignar alias stg al deployment preview
         run: |
           vercel alias set ${{ needs.deploy-preview.outputs.deployment_id }} stg.afinsrl.com.ar \
