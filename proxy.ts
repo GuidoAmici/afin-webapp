@@ -38,13 +38,9 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'empleado') {
+    // El role se lee de app_metadata (firmado en el JWT, solo escribible
+    // con la service role key) — nunca de una tabla editable por el usuario.
+    if (user.app_metadata?.role !== 'empleado') {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }

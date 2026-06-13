@@ -330,7 +330,7 @@ export default function CartModal({ onClose }: Props) {
                     {loading ? 'Procesando...' : (hasPending ? 'Agregar al pedido' : 'Enviar pedido')}
                   </button>
                   <p style={{ fontSize: 12, color: 'var(--fg-3)', textAlign: 'center', marginTop: 8 }}>
-                    Andrés te contactará para acordar precio, envío y pago.
+                    Andrés te contactará para acordar precio, envío o retiro en fábrica, y pago.
                   </p>
                 </>
               ) : pendingOrder !== 'loading' && !hasPending ? (
@@ -353,7 +353,7 @@ export default function CartModal({ onClose }: Props) {
                 ← Volver
               </button>
               <h2 className="modal-title" style={{ marginBottom: 20 }}>Completá tus datos</h2>
-              <p style={{ fontSize: 14, color: 'var(--fg-3)', marginBottom: 20 }}>Necesitamos estos datos para coordinar el envío.</p>
+              <p style={{ fontSize: 14, color: 'var(--fg-3)', marginBottom: 20 }}>Necesitamos estos datos para coordinar la entrega o el retiro en fábrica.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
                 <FieldInput label="Teléfono / WhatsApp *" value={form.telefono} onChange={v => setForm(p => ({ ...p, telefono: v }))} placeholder="+54 9 11 1234-5678" inputMode="tel" />
                 <FieldInput label="Dirección *" value={form.direccion} onChange={v => setForm(p => ({ ...p, direccion: v }))} placeholder="Calle 123, Piso 4" />
@@ -396,7 +396,7 @@ export default function CartModal({ onClose }: Props) {
               <p style={{ fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.6, marginBottom: 20 }}>
                 {wasUpdated
                   ? 'Los nuevos ítems fueron agregados al pedido pendiente.'
-                  : 'Andrés te contactará a la brevedad para confirmar disponibilidad, precio y envío.'}
+                  : 'Andrés te contactará a la brevedad para confirmar disponibilidad, precio y coordinar entrega o retiro en fábrica.'}
               </p>
               <p style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 24 }}>
                 Pedido: <strong>{orderId.slice(0, 8).toUpperCase()}</strong>
