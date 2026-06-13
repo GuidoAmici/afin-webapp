@@ -6,3 +6,5 @@ test('/empleados redirige a login si no hay sesión', async ({ page }) => {
 })
 
 // TODO: tests de roles requieren usuarios de prueba con app_metadata.role configurado.
+test.todo('usuario con role=admin accede a /empleados sin redirección')
+test.todo('usuario con role=cliente es redirigido a / desde /empleados')
