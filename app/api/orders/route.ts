@@ -81,13 +81,23 @@ export async function POST(request: Request) {
     orderId = order.id
   }
 
+  // Resolve prices server-side — never trust client-supplied unitPrice
+  const productIds = items.map(i => i.productId)
+  const { data: prices } = await supabase
+    .from('products')
+    .select('id, price_retail, price_wholesale')
+    .in('id', productIds)
+  const priceMap = new Map(
+    (prices ?? []).map(p => [p.id, p.price_retail ?? p.price_wholesale ?? null])
+  )
+
   // Insertar ítems
   const { error: itemsError } = await supabase.from('order_items').insert(
     items.map(item => ({
       order_id: orderId,
       product_id: item.productId,
       quantity: item.quantity,
-      unit_price: item.unitPrice ?? null,
+      unit_price: priceMap.get(item.productId) ?? null,
     }))
   )
 

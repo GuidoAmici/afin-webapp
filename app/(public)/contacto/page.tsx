@@ -13,7 +13,7 @@ export default function ContactoPage() {
         <div className="page-hero-inner">
           <p className="section-label" style={{ color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>Ponete en contacto</p>
           <h1>Contacto</h1>
-          <p>Para consultas rápidas escribinos por WhatsApp. También podés enviarnos un email o visitarnos.</p>
+          <p>Somos una fábrica — no una tienda. Para consultas, muestras o coordinar el retiro de pedidos escribinos por WhatsApp y acordamos día y horario.</p>
         </div>
       </section>
 
@@ -39,20 +39,24 @@ export default function ContactoPage() {
                 </li>
                 <li>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                  <span>Martínez, San Isidro, Buenos Aires, Argentina</span>
+                  <span>Santo Domingo 1752, Martínez, San Isidro, Buenos Aires</span>
+                </li>
+                <li>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /><line x1="12" y1="12" x2="12" y2="16" /><line x1="10" y1="14" x2="14" y2="14" /></svg>
+                  <span>Retiro de pedidos y muestras en planta — coordiná día y horario por WhatsApp antes de acercarte.</span>
                 </li>
               </ul>
             </div>
 
             <div className="contact-map-wrap">
               <iframe
-                src="https://www.google.com/maps?q=Martínez,+San+Isidro,+Buenos+Aires,+Argentina&output=embed"
+                src="https://www.google.com/maps?q=Santo+Domingo+1752,+Martínez,+San+Isidro,+Buenos+Aires,+Argentina&output=embed"
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title="Ubicación de AFIN srl en Martínez, Buenos Aires"
+                title="Ubicación de AFIN srl — Santo Domingo 1752, Martínez, Buenos Aires"
               />
             </div>
           </div>

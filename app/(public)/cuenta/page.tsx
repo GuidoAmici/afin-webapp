@@ -22,6 +22,10 @@ export default function CuentaPage() {
   const [dni,           setDni]           = useState('')
   const [nombreEmpresa, setNombreEmpresa] = useState('')
   const [cuit,          setCuit]          = useState('')
+  const [saved, setSaved] = useState({
+    nombre: '', telefono: '', direccion: '', localidad: '', codigoPostal: '',
+    tipo: 'personal' as TipoFacturacion, dni: '', nombreEmpresa: '', cuit: '',
+  })
   const [saving,        setSaving]        = useState<string | null>(null)
   const [msgs,          setMsgs]          = useState<Record<string, { ok: boolean; text: string }>>({})
   const router = useRouter()
@@ -36,15 +40,27 @@ export default function CuentaPage() {
         .select('nombre,empresa,telefono,direccion,localidad,codigo_postal,cuit,dni,tipo_facturacion')
         .eq('id', user.id).single()
       if (data) {
-        setNombre(data.nombre ?? '')
-        setTelefono(data.telefono ?? '')
-        setDireccion(data.direccion ?? '')
-        setLocalidad(data.localidad ?? '')
-        setCodigoPostal(data.codigo_postal ?? '')
-        setTipo((data.tipo_facturacion ?? 'personal') as TipoFacturacion)
-        setDni(data.dni ?? '')
-        setNombreEmpresa(data.empresa ?? '')
-        setCuit(data.cuit ?? '')
+        const snap = {
+          nombre:        data.nombre          ?? '',
+          telefono:      data.telefono        ?? '',
+          direccion:     data.direccion       ?? '',
+          localidad:     data.localidad       ?? '',
+          codigoPostal:  data.codigo_postal   ?? '',
+          tipo:          (data.tipo_facturacion ?? 'personal') as TipoFacturacion,
+          dni:           data.dni             ?? '',
+          nombreEmpresa: data.empresa         ?? '',
+          cuit:          data.cuit            ?? '',
+        }
+        setSaved(snap)
+        setNombre(snap.nombre)
+        setTelefono(snap.telefono)
+        setDireccion(snap.direccion)
+        setLocalidad(snap.localidad)
+        setCodigoPostal(snap.codigoPostal)
+        setTipo(snap.tipo)
+        setDni(snap.dni)
+        setNombreEmpresa(snap.nombreEmpresa)
+        setCuit(snap.cuit)
       }
       setReady(true)
     }
@@ -73,18 +89,19 @@ export default function CuentaPage() {
     if (ok) setTimeout(() => setMsgs(prev => { const n = { ...prev }; delete n[section]; return n }), 3000)
   }
 
-  async function saveFields(section: string, fields: Record<string, unknown>) {
+  async function saveFields(section: string, fields: Record<string, unknown>): Promise<boolean> {
     setSaving(section)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(null); return }
+    if (!user) { setSaving(null); return false }
     const { error } = await supabase.from('profiles').update(fields).eq('id', user.id)
     setSaving(null)
     showMsg(section, !error, error ? 'Error al guardar.' : 'Guardado correctamente.')
+    return !error
   }
 
-  function saveDatos() {
-    saveFields('datos', {
+  async function saveDatos() {
+    const ok = await saveFields('datos', {
       nombre: nombre || null, telefono: telefono || null,
       direccion: direccion || null, localidad: localidad || null,
       codigo_postal: codigoPostal || null, tipo_facturacion: tipo,
@@ -92,6 +109,7 @@ export default function CuentaPage() {
       empresa: tipo === 'empresa' ? (nombreEmpresa || null) : null,
       cuit: tipo === 'empresa' ? (cuit || null) : null,
     })
+    if (ok) setSaved({ nombre, telefono, direccion, localidad, codigoPostal, tipo, dni, nombreEmpresa, cuit })
   }
 
   async function handleSignOut() {
@@ -103,6 +121,17 @@ export default function CuentaPage() {
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const isDirty =
+    nombre        !== saved.nombre        ||
+    telefono      !== saved.telefono      ||
+    direccion     !== saved.direccion     ||
+    localidad     !== saved.localidad     ||
+    codigoPostal  !== saved.codigoPostal  ||
+    tipo          !== saved.tipo          ||
+    dni           !== saved.dni           ||
+    nombreEmpresa !== saved.nombreEmpresa ||
+    cuit          !== saved.cuit
 
   const initials = nombre.trim().split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
 
@@ -245,7 +274,7 @@ export default function CuentaPage() {
                 </div>
               )}
 
-              <SaveRow loading={saving === 'datos'} msg={msgs['datos']} onSave={saveDatos} />
+              {isDirty && <SaveRow loading={saving === 'datos'} msg={msgs['datos']} onSave={saveDatos} />}
             </Section>
 
             {/* Preferencias */}

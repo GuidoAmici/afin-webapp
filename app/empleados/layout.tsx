@@ -8,13 +8,13 @@ export default async function EmpleadosLayout({ children }: { children: React.Re
 
   if (!user) redirect('/auth/login?redirect=/empleados')
 
+  if (user.app_metadata?.role !== 'empleado') redirect('/')
+
   const { data: profile } = await supabase
     .from('profiles')
-    .select('nombre, role')
+    .select('nombre')
     .eq('id', user.id)
     .single()
-
-  if (profile?.role !== 'empleado') redirect('/')
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)' }}>

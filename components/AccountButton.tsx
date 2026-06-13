@@ -11,25 +11,34 @@ export default function AccountButton() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState<string>('')
+  const [role, setRole] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   useEffect(() => {
-    createClient().auth.getUser().then(({ data: { user } }) => {
-      if (!user) { setLoggedIn(false); return }
+    const supabase = createClient()
+
+    function applyUser(user: { app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown>; email?: string | null } | null) {
+      if (!user) { setLoggedIn(false); setAvatarUrl(null); setInitials(''); setRole(null); return }
       setLoggedIn(true)
-      setAvatarUrl(user.user_metadata?.avatar_url ?? null)
-      const fullName: string =
-        user.user_metadata?.full_name ??
-        user.user_metadata?.name ??
-        user.email ??
-        ''
+      const meta = user.user_metadata ?? {}
+      setAvatarUrl((meta.avatar_url as string) ?? null)
+      const fullName = (meta.full_name as string) ?? (meta.name as string) ?? user.email ?? ''
       setInitials(
         fullName.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? '').join('')
       )
+      setRole((user.app_metadata?.role as string) ?? null)
+    }
+
+    supabase.auth.getUser().then(({ data: { user } }) => applyUser(user))
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyUser(session?.user ?? null)
     })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -88,6 +97,15 @@ export default function AccountButton() {
                 role="menu"
                 style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.15))', minWidth: 168, zIndex: 9000, overflow: 'hidden' }}
               >
+                {role === 'empleado' && (
+                  <>
+                    <Link href="/empleados" role="menuitem" onClick={() => setDropdownOpen(false)} style={{ ...linkItemStyle, color: 'var(--orange-600)', fontWeight: 600 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /></svg>
+                      Panel interno
+                    </Link>
+                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                  </>
+                )}
                 <Link href="/cuenta/pedidos" role="menuitem" onClick={() => setDropdownOpen(false)} style={linkItemStyle}>
                   <OrdersIcon size={14} style={{ flexShrink: 0 }} /> Mis pedidos
                 </Link>
@@ -114,10 +132,7 @@ export default function AccountButton() {
       {modalOpen && (
         <LoginModal
           onClose={() => setModalOpen(false)}
-          onSuccess={() => {
-            setModalOpen(false)
-            setLoggedIn(true)
-          }}
+          onSuccess={() => setModalOpen(false)}
         />
       )}
     </>
