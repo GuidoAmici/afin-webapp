@@ -105,7 +105,6 @@ jobs:
       - name: Aplicar migraciones a stg
         run: |
           supabase link --project-ref wbsvxdquzvsawmjoiwat --password "$SUPABASE_DB_PASSWORD"
-          supabase migration repair --status reverted 20260611152734 20260611163147 20260611170310 20260611172247 20260611173633 2>/dev/null || true
           supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
