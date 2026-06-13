@@ -9,5 +9,7 @@ test('POST /api/orders rechaza solicitudes no autenticadas', async ({ request })
   expect(res.status()).toBe(401)
 })
 
-// TODO: test de inyección completo requiere usuario de prueba con perfil completo + producto conocido.
-test.todo('unitPrice inyectado en el body no se persiste — el precio viene del catálogo server-side')
+test('unitPrice inyectado en el body no se persiste — el precio viene del catálogo server-side', async () => {
+  // TODO: requiere usuario de prueba con perfil completo + producto conocido.
+  test.skip(true, 'Pending test fixtures')
+})

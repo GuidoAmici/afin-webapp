@@ -133,6 +133,8 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
       - run: npm ci
+      - name: Versión de Playwright instalada
+        run: npx playwright --version
       - name: Instalar browsers (solo si no hay caché)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
