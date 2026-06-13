@@ -40,7 +40,8 @@ export async function proxy(request: NextRequest) {
 
     // El role se lee de app_metadata (firmado en el JWT, solo escribible
     // con la service role key) — nunca de una tabla editable por el usuario.
-    if (user.app_metadata?.role !== 'empleado') {
+    const role = user.app_metadata?.role
+    if (role !== 'empleado' && role !== 'admin') {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }
