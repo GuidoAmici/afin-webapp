@@ -260,32 +260,40 @@ GRANT  UPDATE (notes) ON public.orders TO authenticated;
 -- (incluye admin). DROP/CREATE de las policies creadas en migraciones previas.
 -- ============================================================
 
+-- Se dropea tanto el nombre viejo ('Empleados…') como el nuevo ('Staff…')
+-- para que la migración sea idempotente sobre cualquier estado previo.
 DROP POLICY IF EXISTS "Empleados ven todos los pedidos" ON public.orders;
+DROP POLICY IF EXISTS "Staff gestiona todos los pedidos" ON public.orders;
 CREATE POLICY "Staff gestiona todos los pedidos"
   ON public.orders FOR ALL
   USING (public.is_staff());
 
 DROP POLICY IF EXISTS "Empleados ven todos los items" ON public.order_items;
+DROP POLICY IF EXISTS "Staff gestiona todos los items" ON public.order_items;
 CREATE POLICY "Staff gestiona todos los items"
   ON public.order_items FOR ALL
   USING (public.is_staff());
 
 DROP POLICY IF EXISTS "Empleados leen todos los perfiles" ON public.profiles;
+DROP POLICY IF EXISTS "Staff lee todos los perfiles" ON public.profiles;
 CREATE POLICY "Staff lee todos los perfiles"
   ON public.profiles FOR SELECT
   USING (public.is_staff());
 
 DROP POLICY IF EXISTS "Empleados gestionan order_events" ON public.order_events;
+DROP POLICY IF EXISTS "Staff gestiona order_events" ON public.order_events;
 CREATE POLICY "Staff gestiona order_events"
   ON public.order_events FOR ALL
   USING (public.is_staff());
 
 DROP POLICY IF EXISTS "Empleados gestionan payments" ON public.payments;
+DROP POLICY IF EXISTS "Staff gestiona payments" ON public.payments;
 CREATE POLICY "Staff gestiona payments"
   ON public.payments FOR ALL
   USING (public.is_staff());
 
 DROP POLICY IF EXISTS "Empleados gestionan settings" ON public.settings;
+DROP POLICY IF EXISTS "Staff gestiona settings" ON public.settings;
 CREATE POLICY "Staff gestiona settings"
   ON public.settings FOR ALL
   USING (public.is_staff());
@@ -301,6 +309,7 @@ CREATE POLICY "Dueño lee sus comprobantes"
   );
 
 DROP POLICY IF EXISTS "Empleados gestionan comprobantes" ON storage.objects;
+DROP POLICY IF EXISTS "Staff gestiona comprobantes" ON storage.objects;
 CREATE POLICY "Staff gestiona comprobantes"
   ON storage.objects FOR ALL
   USING (
