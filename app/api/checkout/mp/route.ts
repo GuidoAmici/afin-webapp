@@ -20,10 +20,8 @@ export async function POST(request: Request) {
     p_payment_method: 'mercadopago',
   })
   if (error || !order) {
-    return NextResponse.json(
-      { error: error?.message ?? 'No se pudo preparar el checkout' },
-      { status: 400 },
-    )
+    console.error('checkout/mp prepare_checkout:', error?.message ?? 'sin orden')
+    return NextResponse.json({ error: 'No se pudo iniciar el pago' }, { status: 400 })
   }
 
   const { data: items } = await supabase
@@ -57,6 +55,6 @@ export async function POST(request: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'error desconocido'
     console.error('checkout/mp:', msg)
-    return NextResponse.json({ error: `No se pudo iniciar el pago: ${msg}` }, { status: 502 })
+    return NextResponse.json({ error: 'No se pudo iniciar el pago' }, { status: 502 })
   }
 }
