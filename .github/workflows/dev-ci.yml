@@ -34,6 +34,20 @@ jobs:
       - run: npm ci
       - run: npm run lint
 
+  pgtap:
+    name: pgTAP (transition_order + RLS)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+      - name: Levantar Postgres local y correr la suite pgTAP
+        run: |
+          supabase db start
+          supabase test db
+
   deploy-preview:
     name: Build + Deploy preview dev → Vercel
     needs: lint
@@ -151,7 +165,7 @@ jobs:
 
   merge-to-stg:
     name: Merge dev → stg
-    needs: playwright
+    needs: [playwright, pgtap]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3

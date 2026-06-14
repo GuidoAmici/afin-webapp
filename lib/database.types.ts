@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -376,7 +396,108 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      _transition_order_core: {
+        Args: {
+          p_actor_id: string
+          p_actor_level: number
+          p_actor_role: string
+          p_axis: string
+          p_can_override: boolean
+          p_metadata: Json
+          p_order_id: string
+          p_to: string
+        }
+        Returns: {
+          confirmed_at: string | null
+          created_at: string
+          delivered_at: string | null
+          discount_pct: number | null
+          dispatched_at: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string
+          prepared_at: string | null
+          ready_at: string | null
+          status: string
+          total: number | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      is_admin: { Args: never; Returns: boolean }
+      is_staff: { Args: never; Returns: boolean }
+      jwt_role: { Args: never; Returns: string }
+      transition_order: {
+        Args: {
+          p_axis: string
+          p_metadata?: Json
+          p_order_id: string
+          p_to: string
+        }
+        Returns: {
+          confirmed_at: string | null
+          created_at: string
+          delivered_at: string | null
+          discount_pct: number | null
+          dispatched_at: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string
+          prepared_at: string | null
+          ready_at: string | null
+          status: string
+          total: number | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      transition_order_system: {
+        Args: {
+          p_actor_id?: string
+          p_actor_role?: string
+          p_axis: string
+          p_metadata?: Json
+          p_order_id: string
+          p_to: string
+        }
+        Returns: {
+          confirmed_at: string | null
+          created_at: string
+          delivered_at: string | null
+          discount_pct: number | null
+          dispatched_at: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string
+          prepared_at: string | null
+          ready_at: string | null
+          status: string
+          total: number | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
@@ -505,7 +626,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+
