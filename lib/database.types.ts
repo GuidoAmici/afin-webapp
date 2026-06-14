@@ -434,6 +434,32 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       jwt_role: { Args: never; Returns: string }
+      prepare_checkout: {
+        Args: { p_order_id: string; p_payment_method: string }
+        Returns: {
+          confirmed_at: string | null
+          created_at: string
+          delivered_at: string | null
+          discount_pct: number | null
+          dispatched_at: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string
+          prepared_at: string | null
+          ready_at: string | null
+          status: string
+          total: number | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       transition_order: {
         Args: {
           p_axis: string

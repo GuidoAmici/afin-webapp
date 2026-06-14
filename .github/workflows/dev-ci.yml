@@ -33,6 +33,7 @@ jobs:
           key: node-modules-${{ hashFiles('package-lock.json') }}
       - run: npm ci
       - run: npm run lint
+      - run: npm run test:unit
 
   pgtap:
     name: pgTAP (transition_order + RLS)
