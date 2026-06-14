@@ -1,26 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-
-const STATUS_LABEL: Record<string, string> = {
-  nuevo:           'Nuevo',
-  contactado:      'Contactado',
-  esperando_pago:  'Esperando pago',
-  confirmado:      'Confirmado',
-  en_preparacion:  'En preparación',
-  despachado:      'Despachado',
-  entregado:       'Entregado',
-  cancelado:       'Cancelado',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  nuevo:           'var(--warning-500)',
-  contactado:      'var(--orange-500)',
-  esperando_pago:  'var(--orange-600)',
-  confirmado:      'var(--success-500)',
-  en_preparacion:  'var(--success-500)',
-  despachado:      'var(--neutral-500)',
-  entregado:       'var(--neutral-400)',
-  cancelado:       'var(--error-500)',
-}
+import { statusMeta, statusTint } from '@/lib/order-status'
 
 export default async function PedidosPage() {
   const supabase = await createClient()
@@ -53,13 +32,15 @@ export default async function PedidosPage() {
             const items = (order.order_items as unknown) as { quantity: number; unit_price: string | null; products: { name: string } | null }[]
             const fecha = new Date(order.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
+            const { label, color } = statusMeta(order.status)
+
             return (
-              <div key={order.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 24px', borderLeft: `4px solid ${STATUS_COLOR[order.status] ?? 'var(--border)'}` }}>
+              <div key={order.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 24px', borderLeft: `4px solid ${color}` }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLOR[order.status], background: `${STATUS_COLOR[order.status]}18`, padding: '3px 8px', borderRadius: 'var(--radius-full)' }}>
-                        {STATUS_LABEL[order.status]}
+                      <span style={{ fontSize: 12, fontWeight: 600, color, background: statusTint(color), padding: '3px 8px', borderRadius: 'var(--radius-full)' }}>
+                        {label}
                       </span>
                       <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>{fecha}</span>
                       <span style={{ fontSize: 11, color: 'var(--fg-3)', fontFamily: 'monospace' }}>#{order.id.slice(0, 8).toUpperCase()}</span>

@@ -205,10 +205,10 @@ export default function CuentaPage() {
               <button
                 onClick={handleSignOut}
                 title={!expanded ? 'Cerrar sesión' : undefined}
-                style={{ width: '100%', height: 40, display: 'flex', alignItems: 'center', justifyContent: expanded ? 'flex-start' : 'center', gap: 10, padding: expanded ? '0 10px' : '0', fontSize: 13, color: 'var(--error-600, #dc2626)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-md)', whiteSpace: 'nowrap' }}
+                style={{ width: '100%', height: 40, display: 'flex', alignItems: 'center', justifyContent: expanded ? 'flex-start' : 'center', gap: 10, padding: expanded ? '0 10px' : '0', fontSize: 13, color: 'var(--error-500)', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-md)', whiteSpace: 'nowrap' }}
               >
                 <span style={{ flexShrink: 0, display: 'flex' }}>
-                  <SignOutIcon size={17} color="var(--error-600, #dc2626)" />
+                  <SignOutIcon size={17} color="var(--error-500)" />
                 </span>
                 {expanded && 'Cerrar sesión'}
               </button>
@@ -319,11 +319,11 @@ function SaveRow({ loading, msg, onSave, disabled }: {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
       <button onClick={onSave} disabled={loading || disabled}
-        style={{ padding: '8px 22px', fontSize: 13, fontWeight: 600, background: (loading || disabled) ? 'var(--neutral-300, #d4d4d4)' : 'var(--orange-600)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: (loading || disabled) ? 'not-allowed' : 'pointer' }}>
+        style={{ padding: '8px 22px', fontSize: 13, fontWeight: 600, background: (loading || disabled) ? 'var(--neutral-300)' : 'var(--orange-600)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', cursor: (loading || disabled) ? 'not-allowed' : 'pointer' }}>
         {loading ? 'Guardando...' : 'Guardar'}
       </button>
       {msg && (
-        <span style={{ fontSize: 13, color: msg.ok ? 'var(--success-700, #15803d)' : 'var(--error-700, #b91c1c)' }}>
+        <span style={{ fontSize: 13, color: msg.ok ? 'var(--success-700)' : 'var(--error-700)' }}>
           {msg.text}
         </span>
       )}
