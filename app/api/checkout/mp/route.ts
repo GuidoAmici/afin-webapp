@@ -42,16 +42,21 @@ export async function POST(request: Request) {
   })
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin
-  const pref = await createCheckoutPreference({
-    orderId,
-    items: prefItems,
-    backUrls: {
-      success: `${origin}/cuenta/pedidos?pago=ok`,
-      failure: `${origin}/cuenta/pedidos?pago=error`,
-      pending: `${origin}/cuenta/pedidos?pago=pendiente`,
-    },
-    notificationUrl: `${origin}/api/webhooks/mp`,
-  })
-
-  return NextResponse.json({ initPoint: pref.initPoint })
+  try {
+    const pref = await createCheckoutPreference({
+      orderId,
+      items: prefItems,
+      backUrls: {
+        success: `${origin}/cuenta/pedidos?pago=ok`,
+        failure: `${origin}/cuenta/pedidos?pago=error`,
+        pending: `${origin}/cuenta/pedidos?pago=pendiente`,
+      },
+      notificationUrl: `${origin}/api/webhooks/mp`,
+    })
+    return NextResponse.json({ initPoint: pref.initPoint })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'error desconocido'
+    console.error('checkout/mp:', msg)
+    return NextResponse.json({ error: `No se pudo iniciar el pago: ${msg}` }, { status: 502 })
+  }
 }
