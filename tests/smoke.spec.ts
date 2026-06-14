@@ -29,11 +29,11 @@ test('filtro de productos funciona', async ({ page }) => {
   await expect(page.getByText('4 productos encontrados')).toBeVisible()
 })
 
-test('página de contacto muestra datos de la empresa y formulario de newsletter', async ({ page }) => {
+test('página de contacto muestra datos de la empresa', async ({ page }) => {
   await page.goto('/contacto')
   const main = page.locator('#main-content')
-  await expect(main.getByLabel('Tu correo electrónico')).toBeVisible()
-  await expect(main.getByRole('button', { name: /suscribirme/i })).toBeVisible()
+  await expect(main.getByRole('heading', { name: /datos de la empresa/i })).toBeVisible()
+  await expect(main.getByText('info@afinsrl.com.ar')).toBeVisible()
 })
 
 test('carrito vacío muestra botón "Ver productos" en mobile', async ({ page }) => {

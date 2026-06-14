@@ -8,8 +8,9 @@ export default function Footer() {
       <div className="footer-inner">
         <div className="footer-newsletter">
           <div className="footer-newsletter-text">
-            <p>Suscribite al newsletter</p>
-            <p>Productos nuevos, promociones y artículos del blog.</p>
+            <p className="footer-newsletter-eyebrow">Novedades</p>
+            <p className="footer-newsletter-title">Suscribite al newsletter</p>
+            <p className="footer-newsletter-desc">Recibí actualizaciones sobre productos nuevos, promociones y artículos del blog.</p>
           </div>
           <NewsletterForm />
         </div>
