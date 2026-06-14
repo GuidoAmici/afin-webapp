@@ -210,6 +210,28 @@ export default function CartModal({ onClose }: Props) {
     }
   }
 
+  async function handlePagarMP() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/checkout/mp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.initPoint) {
+        setError(data.error ?? 'No se pudo iniciar el pago.')
+        return
+      }
+      window.location.href = data.initPoint
+    } catch {
+      setError('No pudimos conectar para iniciar el pago.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const hasPending = pendingOrder !== 'loading' && pendingOrder !== null ? pendingOrder : null
   const tipo = form.tipo
 
@@ -401,7 +423,18 @@ export default function CartModal({ onClose }: Props) {
               <p style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 24 }}>
                 Pedido: <strong>{orderId.slice(0, 8).toUpperCase()}</strong>
               </p>
-              <button onClick={onClose} className="btn-primary">Seguir explorando</button>
+              {error && <div style={{ marginBottom: 12 }}><ErrorMsg>{error}</ErrorMsg></div>}
+              <button
+                onClick={handlePagarMP}
+                disabled={loading}
+                className="btn-block"
+                style={{ marginBottom: 10 }}
+              >
+                {loading ? 'Redirigiendo…' : 'Pagar con Mercado Pago'}
+              </button>
+              <button onClick={onClose} className="btn-text" style={{ color: 'var(--fg-3)' }}>
+                Pagar más tarde
+              </button>
             </div>
           )}
         </div>

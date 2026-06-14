@@ -108,7 +108,7 @@ jobs:
           echo "::error::Timeout: el deployment preview no llegó a READY en 5 minutos" && exit 1
 
   db-test-migration:
-    name: DB migration stg
+    name: DB test migration
     needs: deploy-preview
     runs-on: ubuntu-latest
     environment: stg
@@ -117,7 +117,7 @@ jobs:
       - uses: supabase/setup-cli@v2
         with:
           version: latest
-      - name: Aplicar migraciones a stg
+      - name: Aplicar migraciones a la DB de test
         run: |
           supabase link --project-ref wbsvxdquzvsawmjoiwat --password "$SUPABASE_DB_PASSWORD"
           supabase db push
