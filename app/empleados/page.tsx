@@ -4,7 +4,7 @@ export default async function EmpleadosPage() {
   const supabase = await createClient()
 
   const [{ count: pedidosNuevos }, { count: pedidosHoy }] = await Promise.all([
-    supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'nuevo'),
+    supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pendiente'),
     supabase.from('orders').select('*', { count: 'exact', head: true })
       .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
   ])
@@ -19,7 +19,7 @@ export default async function EmpleadosPage() {
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 40 }}>
-        <StatCard label="Pedidos nuevos" value={pedidosNuevos ?? 0} accent={pedidosNuevos ? 'var(--warning-500)' : undefined} />
+        <StatCard label="Pedidos pendientes" value={pedidosNuevos ?? 0} accent={pedidosNuevos ? 'var(--warning-500)' : undefined} />
         <StatCard label="Pedidos hoy" value={pedidosHoy ?? 0} />
       </div>
 
