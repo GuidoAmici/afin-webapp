@@ -104,13 +104,13 @@ export default async function HomePage() {
 
       {/* CLIENTS MARQUEE */}
       <section className="clients-section" aria-label="Empresas que confían en AFIN srl">
-        <div className="clients-header">
-          <p className="section-label">Confían en nosotros</p>
-          <h2>Empresas que eligen AFIN srl</h2>
+        <div className="container">
+          <div className="clients-header">
+            <p className="section-label">Confían en nosotros</p>
+            <h2>Empresas que eligen AFIN srl</h2>
+          </div>
         </div>
         <div className="marquee-wrapper">
-          <div className="marquee-fade-left" aria-hidden="true" />
-          <div className="marquee-fade-right" aria-hidden="true" />
           <div className="marquee-track" aria-hidden="true">
             {[...CLIENTS, ...CLIENTS].map((client, i) => (
               <div key={i} className="client-card">
@@ -128,6 +128,7 @@ export default async function HomePage() {
       {/* WHY US */}
       <section className="why-us">
         <div className="container">
+          <p className="section-label">Nuestros diferenciales</p>
           <h2>¿Por qué elegir AFIN srl?</h2>
           <div className="why-grid">
             {WHY_US.map(({ icon, title, desc }) => (
@@ -143,14 +144,16 @@ export default async function HomePage() {
 
       {/* CONTACT TEASER */}
       <section className="contact-section">
-        <div className="contact-inner">
-          <p className="section-label">Contacto</p>
-          <h2>Consultanos</h2>
-          <p>Completá el formulario y te respondemos a la brevedad. También podés escribirnos por WhatsApp.</p>
-          <div style={{ marginTop: 32 }}>
-            <Link href="/contacto" className="btn-primary" style={{ fontSize: 15, padding: '12px 28px' }}>
-              Ir al formulario →
-            </Link>
+        <div className="container">
+          <div className="contact-inner">
+            <p className="section-label">Contacto</p>
+            <h2>Consultanos</h2>
+            <p>Completá el formulario y te respondemos a la brevedad. También podés escribirnos por WhatsApp.</p>
+            <div style={{ marginTop: 32 }}>
+              <Link href="/contacto" className="btn-primary" style={{ fontSize: 15, padding: '12px 28px' }}>
+                Ir al formulario →
+              </Link>
+            </div>
           </div>
         </div>
       </section>

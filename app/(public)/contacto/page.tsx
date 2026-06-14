@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import NewsletterForm from '@/components/NewsletterForm'
 
 export const metadata: Metadata = {
   title: 'Contacto',
@@ -60,15 +59,6 @@ export default function ContactoPage() {
               />
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="newsletter-section">
-        <div className="newsletter-inner">
-          <p className="section-label">Novedades</p>
-          <h2>Suscribite al newsletter</h2>
-          <p>Recibí actualizaciones sobre productos nuevos, promociones y artículos del blog.</p>
-          <NewsletterForm />
         </div>
       </section>
     </main>
