@@ -221,7 +221,7 @@ export default function CartModal({ onClose }: Props) {
       })
       const data = await res.json()
       if (!res.ok || !data.initPoint) {
-        setError(data.error ?? 'No se pudo iniciar el pago.')
+        setError('No pudimos conectar para iniciar el pago.')
         return
       }
       window.location.href = data.initPoint
