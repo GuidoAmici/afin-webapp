@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { verifyWebhookSignature, getPayment } from '@/lib/mercadopago'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -14,6 +15,15 @@ export async function POST(request: Request) {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET ?? ''
 
   if (!verifyWebhookSignature({ xSignature, xRequestId, dataId, secret })) {
+    // DEBUG temporal: diagnosticar por qué falla la firma (sin exponer el secret).
+    const ts = xSignature?.split(',').find((p) => p.trim().startsWith('ts='))?.split('=')[1]?.trim()
+    const v1 = xSignature?.split(',').find((p) => p.trim().startsWith('v1='))?.split('=')[1]?.trim()
+    const manifest = `${dataId ? `id:${dataId.toLowerCase()};` : ''}${xRequestId ? `request-id:${xRequestId};` : ''}ts:${ts};`
+    const computed = secret ? crypto.createHmac('sha256', secret).update(manifest).digest('hex') : 'no-secret'
+    console.error(
+      'mp-webhook-debug',
+      JSON.stringify({ dataId, xRequestId, ts, manifest, v1, computed, match: computed === v1, secretLen: secret.length }),
+    )
     return NextResponse.json({ error: 'firma inválida' }, { status: 401 })
   }
 
