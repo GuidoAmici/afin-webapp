@@ -5,6 +5,7 @@ import Image from 'next/image'
 import type { Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
 import { useModalBehavior } from '@/lib/useModalBehavior'
+import { formatARS } from '@/lib/format'
 
 interface Props {
   product: Product
@@ -120,12 +121,12 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
             <div className="product-modal-prices">
               <div className="price-card">
                 <span className="price-label">Precio por menor</span>
-                <span className="price-value">{product.priceRetail ?? 'Consultar'}</span>
+                <span className="price-value">{formatARS(product.priceRetail)}</span>
                 <span className="price-min">mínimo: 1 unidad</span>
               </div>
               <div className="price-card price-card-wholesale">
                 <span className="price-label">Precio por mayor</span>
-                <span className="price-value">{product.priceWholesale ?? 'Consultar'}</span>
+                <span className="price-value">{formatARS(product.priceWholesale)}</span>
                 <span className="price-min">mínimo: 100 unidades</span>
               </div>
             </div>

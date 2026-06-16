@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useCart, type CartItem } from '@/lib/cart'
 import { createClient } from '@/lib/supabase/client'
-import { formatCuit } from '@/lib/format'
+import { formatCuit, formatARS } from '@/lib/format'
 import { useModalBehavior } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, ChoiceToggle } from './ui/form'
 import LoginModal from './LoginModal'
@@ -310,7 +310,7 @@ export default function CartModal({ onClose }: Props) {
                         <Image src={item.image} alt={item.productName} width={44} height={36} style={{ objectFit: 'contain', borderRadius: 4, background: 'white', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-1)', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.productName}</p>
-                          {item.unitPrice && <p style={{ fontSize: 11, color: 'var(--fg-3)' }}>{item.unitPrice}</p>}
+                          {item.unitPrice && <p style={{ fontSize: 11, color: 'var(--fg-3)' }}>{formatARS(item.unitPrice)}</p>}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                           <button className="qty-btn" onClick={() => setQty(item.productId, item.quantity - 1)} aria-label="Restar">−</button>
