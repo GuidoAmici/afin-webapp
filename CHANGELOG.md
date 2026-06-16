@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.3.0](https://github.com/GuidoAmici/afin-website/compare/afin-website-v1.2.0...afin-website-v1.3.0) (2026-06-16)
+
+
+### ✨ Novedades
+
+* **account:** eje de pago, total y detalle expandible en Mis pedidos ([#28](https://github.com/GuidoAmici/afin-website/issues/28)) ([b3fb715](https://github.com/GuidoAmici/afin-website/commit/b3fb7154b0b16e88c2ae58d816a8e5e2b64e3097))
+* **checkout:** botón Pagar con Mercado Pago + rename job de migración ([#14](https://github.com/GuidoAmici/afin-website/issues/14)) ([8c09365](https://github.com/GuidoAmici/afin-website/commit/8c09365911018c2f96ef3320e3584254449f159d))
+* **checkout:** checkout MP + webhook verificado ([#14](https://github.com/GuidoAmici/afin-website/issues/14)) ([0a0ec8a](https://github.com/GuidoAmici/afin-website/commit/0a0ec8a8017eb7b81db3c35456ea06fac3ba2681))
+* **checkout:** infra MP — precios a NUMERIC + núcleo de verificación ([#14](https://github.com/GuidoAmici/afin-website/issues/14)) ([64bb96e](https://github.com/GuidoAmici/afin-website/commit/64bb96e89e1be20b24a89cd2be288985e181d285))
+* **data:** carga parcial de precios desde el Excel ([#24](https://github.com/GuidoAmici/afin-website/issues/24)) ([69e4df3](https://github.com/GuidoAmici/afin-website/commit/69e4df33263cb11ded4627a95c440fbd3432e8b9))
+* **db:** transition_order — cuello único de transiciones ([#13](https://github.com/GuidoAmici/afin-website/issues/13)) ([8fae4c6](https://github.com/GuidoAmici/afin-website/commit/8fae4c67c075b366c755ef8dd19440c7ff48a2ac))
+* **ui:** formatear precios como moneda ($) en modal y carrito ([#27](https://github.com/GuidoAmici/afin-website/issues/27)) ([774b528](https://github.com/GuidoAmici/afin-website/commit/774b5283e415d20cfc650909468fc78d4eb472b9))
+* **ui:** unificar estados de pedido y colores entre paneles de usuario ([9fe58d1](https://github.com/GuidoAmici/afin-website/commit/9fe58d149967fc756d6b6aab05a3eca68c7c0351))
+
+
+### 🐛 Correcciones
+
+* **checkout:** devolver error real de la preference MP en vez de 500 crudo ([d25db33](https://github.com/GuidoAmici/afin-website/commit/d25db33cf39770f0b352b9a07ab7a44b17068a35))
+* **checkout:** error genérico al usuario, detalle técnico solo en el log ([ba9b92b](https://github.com/GuidoAmici/afin-website/commit/ba9b92b9ec06a5f7e9389dc2346e9e68708647bf))
+* **checkout:** usar SUPABASE_SECRET_KEY del proyecto correcto en el webhook ([9ca2570](https://github.com/GuidoAmici/afin-website/commit/9ca2570f627e67afa61d948517ef8eaed1197ac6))
+* **db:** migración transition_order idempotente sobre policies renombradas ([9e0b34c](https://github.com/GuidoAmici/afin-website/commit/9e0b34ca909c3bc30836c2c1ae9dfcbcff2b4bfa))
+* **ui:** unificar patrón de secciones y modo oscuro en home + footer ([9396d2d](https://github.com/GuidoAmici/afin-website/commit/9396d2d0c8ec3effe1529092dee9a22e663a7e56))
+
+
+### 🔧 Mantenimiento
+
+* auto-merge dev → stg ([589173f](https://github.com/GuidoAmici/afin-website/commit/589173f8db661b30687ed4092d2dcb674930e214))
+* auto-merge dev → stg ([1b5ee62](https://github.com/GuidoAmici/afin-website/commit/1b5ee62115bdeb74351380cc77d2697cd73ed3d7))
+* auto-merge dev → stg ([8c4f9d1](https://github.com/GuidoAmici/afin-website/commit/8c4f9d11e266f9cfb4998b954c33a2439c997c23))
+* auto-merge dev → stg ([b6a12fd](https://github.com/GuidoAmici/afin-website/commit/b6a12fd226c0bcf0220ab523d16eda898c674927))
+* auto-merge dev → stg ([d396061](https://github.com/GuidoAmici/afin-website/commit/d396061df09a9b6c9f996c44a82f75de6ce356d9))
+* auto-merge dev → stg ([41a1e05](https://github.com/GuidoAmici/afin-website/commit/41a1e05bfa5b00263d6d065384eb9b46ff5cb389))
+* auto-merge dev → stg ([1c3edc9](https://github.com/GuidoAmici/afin-website/commit/1c3edc92e6e2c8510d3f61adf68df9284055160e))
+* auto-merge dev → stg ([eef3337](https://github.com/GuidoAmici/afin-website/commit/eef33378ebf35741653631bfbe563a32ef304da4))
+* auto-merge dev → stg ([885e83a](https://github.com/GuidoAmici/afin-website/commit/885e83a736bde3d0a4ec51cb3c502136b30eaed0))
+* auto-merge dev → stg ([85cd899](https://github.com/GuidoAmici/afin-website/commit/85cd8990df4ec9b135eb9ceea5edea1c0beb5066))
+* auto-merge dev → stg ([675ceb3](https://github.com/GuidoAmici/afin-website/commit/675ceb3d8710c87a7adfa986c89ba5bebf7b8928))
+* auto-merge dev → stg ([51fdbca](https://github.com/GuidoAmici/afin-website/commit/51fdbcabea9710cd1bcb016bf6b6aa79df7d2426))
+* auto-merge dev → stg ([c27d3ce](https://github.com/GuidoAmici/afin-website/commit/c27d3ce0a740b7302b477ece296cb3382dfd2042))
+* auto-merge dev → stg ([0380baa](https://github.com/GuidoAmici/afin-website/commit/0380baa0a688d9c1e00578103135484e0b84718a))
+* **checkout:** logging temporal de diagnóstico de firma del webhook MP ([7e4a7c6](https://github.com/GuidoAmici/afin-website/commit/7e4a7c6448c05a0470ca3c78a11a307e74e848e7))
+* redeploy con env vars MP en all-preview ([#14](https://github.com/GuidoAmici/afin-website/issues/14)) ([e4215a6](https://github.com/GuidoAmici/afin-website/commit/e4215a6ef48837aeb7746f6812c8fcad90a1f45b))
+* redeploy para tomar env vars de MP en preview ([#14](https://github.com/GuidoAmici/afin-website/issues/14)) ([c55ebec](https://github.com/GuidoAmici/afin-website/commit/c55ebec03c8b5b7eba14d4be546062b003e00b5a))
+
 ## [1.2.0](https://github.com/GuidoAmici/afin-website/compare/afin-website-v1.1.0...afin-website-v1.2.0) (2026-06-13)
 
 
