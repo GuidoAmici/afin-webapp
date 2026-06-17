@@ -1,1 +1,1 @@
-# AFIN Website
+# AFIN Webapp

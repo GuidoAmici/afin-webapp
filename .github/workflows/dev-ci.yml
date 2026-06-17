@@ -197,7 +197,7 @@ jobs:
       - name: Desvincular stg.afinsrl.com.ar de git branch
         run: |
           curl -sf -X PATCH \
-            "https://api.vercel.com/v9/projects/afin-website/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"gitBranch": null}'

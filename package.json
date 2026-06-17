@@ -1,6 +1,6 @@
 {
-  "name": "afin-website",
-  "version": "1.2.0",
+  "name": "afin-webapp",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
