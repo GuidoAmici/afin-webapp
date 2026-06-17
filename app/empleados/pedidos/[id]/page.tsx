@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { statusMeta, statusTint } from '@/lib/order-status'
 import { paymentMeta, paymentMethodLabel } from '@/lib/payment-status'
 import { formatARS } from '@/lib/format'
+import { staffTransitions, type Edge } from '@/lib/order-transitions'
+import { OrderActions, type ActionButton } from './order-actions'
 
 interface OrderDetail {
   id: string
@@ -15,7 +17,7 @@ interface OrderDetail {
   notes: string | null
   created_at: string
   user_id: string
-  profiles: { nombre: string; empresa: string | null; telefono: string | null } | null
+  profiles: { nombre: string; empresa: string | null; telefono: string | null; credito_habilitado: boolean } | null
   order_items: { quantity: number; unit_price: string | null; products: { name: string } | null }[]
 }
 
@@ -69,7 +71,7 @@ export default async function PedidoDetallePage({
     .from('orders')
     .select(`
       id, status, payment_status, payment_method, total, discount_pct, notes, created_at, user_id,
-      profiles ( nombre, empresa, telefono ),
+      profiles ( nombre, empresa, telefono, credito_habilitado ),
       order_items ( quantity, unit_price, products ( name ) )
     `)
     .eq('id', id)
@@ -122,6 +124,28 @@ export default async function PedidoDetallePage({
   const discount = detail.discount_pct !== null && Number(detail.discount_pct) > 0 ? Number(detail.discount_pct) : null
   const profile = detail.profiles
 
+  // Acciones de transición disponibles según el rol del actor. La UI es
+  // cosmética: transition_order vuelve a autorizar server-side (ADR-006).
+  const { data: { user } } = await supabase.auth.getUser()
+  const actorLevel = user?.app_metadata?.role === 'admin' ? 2 : 1
+  const creditoHabilitado = profile?.credito_habilitado ?? false
+
+  function toButton(e: Edge): ActionButton {
+    const meta = e.axis === 'status' ? statusMeta(e.to) : paymentMeta(e.to)
+    const force = e.minLevel === 2
+    // Barrera cross-eje (ADR-005): preparar exige pago o crédito; el admin la saltea.
+    const blocked =
+      e.axis === 'status' && e.from === 'confirmado' && e.to === 'en_preparacion' &&
+      detail.payment_status !== 'pagado' && !creditoHabilitado && actorLevel < 2
+    return {
+      axis: e.axis, to: e.to, label: meta.label, color: meta.color, force,
+      blocked, blockedReason: blocked ? 'Requiere pago o crédito habilitado' : undefined,
+    }
+  }
+
+  const statusActions = staffTransitions('status', detail.status, actorLevel).map(toButton)
+  const paymentActions = staffTransitions('payment_status', detail.payment_status, actorLevel).map(toButton)
+
   return (
     <div style={{ maxWidth: 760 }}>
       <Link href="/empleados/pedidos" style={{ fontSize: 13, color: 'var(--fg-3)', textDecoration: 'none' }}>
@@ -138,6 +162,16 @@ export default async function PedidoDetallePage({
       <p style={{ fontSize: 13, color: 'var(--fg-3)', marginBottom: 24 }}>
         Creado el {formatDateTime(detail.created_at)}
       </p>
+
+      {/* Acciones de transición (toda acción pasa por transition_order) */}
+      <section style={cardStyle}>
+        <h2 style={sectionTitle}>Acciones</h2>
+        <OrderActions
+          orderId={detail.id}
+          statusActions={statusActions}
+          paymentActions={paymentActions}
+        />
+      </section>
 
       {/* Cliente */}
       <section style={cardStyle}>
