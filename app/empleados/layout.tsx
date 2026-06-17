@@ -8,7 +8,10 @@ export default async function EmpleadosLayout({ children }: { children: React.Re
 
   if (!user) redirect('/auth/login?redirect=/empleados')
 
-  if (user.app_metadata?.role !== 'empleado') redirect('/')
+  // El panel es para staff: empleado y admin (ADR-008). La distinción
+  // empleado/admin se enforza en RLS/transition_order, no en esta guarda.
+  const role = user.app_metadata?.role
+  if (role !== 'empleado' && role !== 'admin') redirect('/')
 
   const { data: profile } = await supabase
     .from('profiles')
