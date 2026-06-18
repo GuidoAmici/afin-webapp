@@ -334,20 +334,22 @@ img { max-width: 100%; display: block; }
   -webkit-mask-image: linear-gradient(to right, transparent, #000 120px, #000 calc(100% - 90px), transparent);
           mask-image: linear-gradient(to right, transparent, #000 120px, #000 calc(100% - 90px), transparent);
 }
-.marquee-track { display: flex; animation: marquee 22s linear infinite; width: max-content; }
+.marquee-track { display: flex; animation: marquee 66s linear infinite; width: max-content; }
 .marquee-track:hover { animation-play-state: paused; }
 @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 
 .client-card {
-  flex-shrink: 0; width: 200px; margin-right: 20px;
+  flex-shrink: 0; width: 200px; margin-right: 20px; overflow: hidden;
   background: linear-gradient(150deg, var(--orange-500) 0%, var(--orange-700) 100%);
   border: 1.5px solid var(--orange-400);
-  border-radius: 12px; padding: 24px 20px; display: flex; flex-direction: column;
-  align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(232,100,26,0.25);
+  border-radius: 12px; display: flex; flex-direction: column;
+  box-shadow: 0 4px 14px rgba(232,100,26,0.25);
   transition: border-color var(--dur-normal) var(--ease), box-shadow var(--dur-normal) var(--ease), transform var(--dur-normal) var(--ease);
 }
 .client-card:hover { border-color: var(--orange-300); box-shadow: 0 8px 24px rgba(232,100,26,0.40); transform: translateY(-2px); }
-.client-card-logo { width: 56px; height: 56px; border-radius: 10px; background: rgba(255,255,255,0.18); border: 1.5px solid rgba(255,255,255,0.30); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; color: #fff; }
+.rubro-card-img { width: 100%; height: 116px; flex-shrink: 0; }
+.rubro-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rubro-card-body { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .client-card-name { font-weight: 700; font-size: 14px; color: #fff; text-align: center; }
 .client-card-desc { font-size: 11px; color: rgba(255,255,255,0.82); text-align: center; }
 

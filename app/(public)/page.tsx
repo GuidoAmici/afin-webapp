@@ -15,12 +15,12 @@ export const revalidate = 300
 const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
 
 const RUBROS = [
-  { initial: 'C', name: 'Cosmética',         desc: 'Tapas, frascos y dosificadores' },
-  { initial: 'P', name: 'Perfumería',        desc: 'Envases y cierres' },
-  { initial: 'F', name: 'Farmacéutica',      desc: 'Frascos y tapas de seguridad' },
-  { initial: 'D', name: 'Dermatología',      desc: 'Envases para cremas y geles' },
-  { initial: 'A', name: 'Agroquímicos',      desc: 'Bidones y tapas industriales' },
-  { initial: 'L', name: 'Limpieza & Hogar',  desc: 'Bombas, gatillos y tapas' },
+  { img: '/images/rubros/cosmetica.jpg',    name: 'Cosmética',        desc: 'Tapas, frascos y dosificadores' },
+  { img: '/images/rubros/perfumeria.jpg',   name: 'Perfumería',       desc: 'Envases y cierres' },
+  { img: '/images/rubros/farmaceutica.jpg', name: 'Farmacéutica',     desc: 'Frascos y tapas de seguridad' },
+  { img: '/images/rubros/dermatologia.jpg', name: 'Dermatología',     desc: 'Envases para cremas y geles' },
+  { img: '/images/rubros/agroquimicos.jpg', name: 'Agroquímicos',     desc: 'Bidones y tapas industriales' },
+  { img: '/images/rubros/limpieza.jpg',     name: 'Limpieza & Hogar', desc: 'Bombas, gatillos y tapas' },
 ]
 
 const WHY_US = [
@@ -112,10 +112,14 @@ export default async function HomePage() {
         </div>
         <div className="marquee-wrapper">
           <div className="marquee-track" aria-hidden="true">
-            {[...RUBROS, ...RUBROS].map((rubro, i) => (
+            {/* 6 copias: cada mitad del track (3×RUBROS) supera el ancho de
+                viewport, así el loop con translateX(-50%) no deja huecos. */}
+            {Array.from({ length: 6 }).flatMap(() => RUBROS).map((rubro, i) => (
               <div key={i} className="client-card">
-                <div className="client-card-logo">{rubro.initial}</div>
-                <div>
+                <div className="rubro-card-img">
+                  <Image src={rubro.img} alt={`Envases para ${rubro.name}`} width={200} height={116} />
+                </div>
+                <div className="rubro-card-body">
                   <p className="client-card-name">{rubro.name}</p>
                   <p className="client-card-desc">{rubro.desc}</p>
                 </div>
