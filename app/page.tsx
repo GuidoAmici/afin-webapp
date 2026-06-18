@@ -10,13 +10,13 @@ export const metadata: Metadata = {
 
 const FEATURED_IDS = ['tapa-tubo', 'bomba-15-plata', 'frasco-violeta-50', 'frasco-argenta-30']
 
-const CLIENTS = [
-  { initial: 'L', name: 'Lidherma',            desc: 'Cosmética & Dermatología' },
-  { initial: 'T', name: 'Top Crop',             desc: 'Agroquímicos' },
-  { initial: 'M', name: 'Myselec SRL',          desc: 'Industria eléctrica' },
-  { initial: 'M', name: 'Monique Cosméticos',   desc: 'Perfumería & Cosméticos' },
-  { initial: 'G', name: 'Gigot',                desc: 'Indumentaria & Lifestyle' },
-  { initial: 'A', name: 'Autopartes Paulucci',  desc: 'Autopartes & Repuestos' },
+const RUBROS = [
+  { initial: 'C', name: 'Cosmética',         desc: 'Tapas, frascos y dosificadores' },
+  { initial: 'P', name: 'Perfumería',        desc: 'Envases y cierres' },
+  { initial: 'F', name: 'Farmacéutica',      desc: 'Frascos y tapas de seguridad' },
+  { initial: 'D', name: 'Dermatología',      desc: 'Envases para cremas y geles' },
+  { initial: 'A', name: 'Agroquímicos',      desc: 'Bidones y tapas industriales' },
+  { initial: 'L', name: 'Limpieza & Hogar',  desc: 'Bombas, gatillos y tapas' },
 ]
 
 const WHY_US = [
@@ -99,21 +99,21 @@ export default async function HomePage() {
       </section>
 
       {/* CLIENTS MARQUEE */}
-      <section className="clients-section" aria-label="Empresas que confían en AFIN srl">
+      <section className="clients-section" aria-label="Rubros a los que vende AFIN srl">
         <div className="clients-header">
-          <p className="section-label">Confían en nosotros</p>
-          <h2>Empresas que eligen AFIN srl</h2>
+          <p className="section-label">A quiénes vendemos</p>
+          <h2>Rubros a los que vendemos</h2>
         </div>
         <div className="marquee-wrapper">
           <div className="marquee-fade-left" aria-hidden="true" />
           <div className="marquee-fade-right" aria-hidden="true" />
           <div className="marquee-track" aria-hidden="true">
-            {[...CLIENTS, ...CLIENTS].map((client, i) => (
+            {[...RUBROS, ...RUBROS].map((rubro, i) => (
               <div key={i} className="client-card">
-                <div className="client-card-logo">{client.initial}</div>
+                <div className="client-card-logo">{rubro.initial}</div>
                 <div>
-                  <p className="client-card-name">{client.name}</p>
-                  <p className="client-card-desc">{client.desc}</p>
+                  <p className="client-card-name">{rubro.name}</p>
+                  <p className="client-card-desc">{rubro.desc}</p>
                 </div>
               </div>
             ))}
