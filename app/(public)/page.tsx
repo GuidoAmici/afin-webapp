@@ -103,11 +103,11 @@ export default async function HomePage() {
       </section>
 
       {/* CLIENTS MARQUEE */}
-      <section className="clients-section" aria-label="Empresas que confían en AFIN srl">
+      <section className="clients-section" aria-label="Rubros a los que vende AFIN srl">
         <div className="container">
           <div className="clients-header">
-            <p className="section-label">Confían en nosotros</p>
-            <h2>Empresas que eligen AFIN srl</h2>
+            <p className="section-label">A quiénes vendemos</p>
+            <h2>Rubros a los que vendemos</h2>
           </div>
         </div>
         <div className="marquee-wrapper">
