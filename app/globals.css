@@ -310,6 +310,7 @@ img { max-width: 100%; display: block; }
 .badge-stock   { background: #D5F4E6; color: #1A6B3C; border-color: #9AE6C0; }
 .badge-new     { background: var(--orange-50); color: var(--orange-700); border-color: var(--orange-200); }
 .badge-consult { background: #FEF3CD; color: #7D4E00; border-color: #F7D97E; }
+.badge-out     { background: #F1F1F0; color: #6B6B6B; border-color: #D6D6D4; }
 
 /* ── WHY US ─────────────────────────────────────────────────── */
 .why-us { background: var(--bg-section); padding: var(--section-y) 0; border-top: 1px solid var(--border); transition: background var(--dur-normal) var(--ease); }

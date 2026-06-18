@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import type { Product } from '@/lib/products'
+import { catalogBadge, type Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
 import { useModalBehavior } from '@/lib/useModalBehavior'
 import { formatARS } from '@/lib/format'
@@ -13,8 +13,6 @@ interface Props {
   onClose: () => void
   onSelectRelated?: (product: Product) => void
 }
-
-const BADGE_LABEL: Record<string, string> = { stock: 'En stock', consult: 'Consultar', new: 'Nuevo' }
 
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
   const [imgIndex, setImgIndex] = useState(0)
@@ -48,6 +46,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
   }, [images.length])
 
   const waMessage = encodeURIComponent(`Hola! Me interesa el producto: ${product.name}`)
+  const badge = catalogBadge(product)
 
   return (
     <div
@@ -111,7 +110,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
 
             <div className="product-modal-title-row">
               <h2 id="modal-product-title" className="product-modal-name">{product.name}</h2>
-              <span className={`badge badge-${product.badge}`}>{BADGE_LABEL[product.badge]}</span>
+              <span className={`badge badge-${badge.variant}`}>{badge.label}</span>
             </div>
 
             {product.description && (
@@ -131,34 +130,43 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
               </div>
             </div>
 
-            {product.badge === 'stock' && (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  <button onClick={() => setQty(qty - 1)} style={qtyBtnStyle} aria-label="Restar">−</button>
-                  <input
-                    type="number"
-                    min={1}
-                    value={qty}
-                    onChange={handleQtyInput}
-                    onBlur={() => setQty(qty)}
-                    style={{ width: 48, textAlign: 'center', border: 'none', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', padding: '8px 4px', fontSize: 14, fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--fg-1)', outline: 'none' }}
-                  />
-                  <button onClick={() => setQty(qty + 1)} style={qtyBtnStyle} aria-label="Sumar">+</button>
+            {product.stockStatus === 'en_stock' && (
+              <>
+                {/* Sin stock disponible no bloquea la compra: el pedido sigue y, al
+                    pagar, entra en espera de stock con aviso de demora (ADR-007). */}
+                {!product.inStock && (
+                  <p className="product-modal-stock-note" style={{ fontSize: 13, color: 'var(--orange-700)', margin: '0 0 10px' }}>
+                    Sin stock inmediato — podés pedirlo igual; puede demorar.
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                    <button onClick={() => setQty(qty - 1)} style={qtyBtnStyle} aria-label="Restar">−</button>
+                    <input
+                      type="number"
+                      min={1}
+                      value={qty}
+                      onChange={handleQtyInput}
+                      onBlur={() => setQty(qty)}
+                      style={{ width: 48, textAlign: 'center', border: 'none', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', padding: '8px 4px', fontSize: 14, fontWeight: 600, background: 'var(--bg-surface)', color: 'var(--fg-1)', outline: 'none' }}
+                    />
+                    <button onClick={() => setQty(qty + 1)} style={qtyBtnStyle} aria-label="Sumar">+</button>
+                  </div>
+                  <button
+                    className="btn-primary product-modal-cta"
+                    style={{ flex: 1, margin: 0 }}
+                    onClick={() => {
+                      add({ productId: product.id, productName: product.name, image: product.image, unitPrice: product.priceRetail }, qty)
+                      setAdded(true)
+                      setTimeout(() => setAdded(false), 2000)
+                    }}
+                  >
+                    {added ? '✓ Agregado' : 'Agregar al pedido'}
+                  </button>
                 </div>
-                <button
-                  className="btn-primary product-modal-cta"
-                  style={{ flex: 1, margin: 0 }}
-                  onClick={() => {
-                    add({ productId: product.id, productName: product.name, image: product.image, unitPrice: product.priceRetail }, qty)
-                    setAdded(true)
-                    setTimeout(() => setAdded(false), 2000)
-                  }}
-                >
-                  {added ? '✓ Agregado' : 'Agregar al pedido'}
-                </button>
-              </div>
+              </>
             )}
-            {product.badge === 'consult' && (
+            {product.stockStatus === 'consultar' && (
               <a
                 href={`https://wa.me/5491122521639?text=${waMessage}`}
                 target="_blank"
@@ -168,7 +176,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
                 Consultar por WhatsApp
               </a>
             )}
-            {product.badge === 'new' && (
+            {product.stockStatus === 'proximamente' && (
               <button className="btn-primary product-modal-cta" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
                 Próximamente
               </button>

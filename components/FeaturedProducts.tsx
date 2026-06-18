@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { Product } from '@/lib/products'
+import { catalogBadge, type Product } from '@/lib/products'
 import ProductModal from './ProductModal'
 
 interface Props {
@@ -41,9 +41,10 @@ export default function FeaturedProducts({ products }: Props) {
             </div>
             <div className="product-card-footer">
               <span className="product-card-link">Ver detalle →</span>
-              <span className={`badge badge-${product.badge}`}>
-                {product.badge === 'stock' ? 'En stock' : 'Consultar'}
-              </span>
+              {(() => {
+                const badge = catalogBadge(product)
+                return <span className={`badge badge-${badge.variant}`}>{badge.label}</span>
+              })()}
             </div>
           </div>
         ))}

@@ -136,6 +136,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_stock"
+            referencedColumns: ["id"]
+          },
         ]
       }
       orders: {
@@ -239,7 +246,6 @@ export type Database = {
       products: {
         Row: {
           active: boolean
-          badge: string
           category_id: string
           description: string | null
           id: string
@@ -249,11 +255,12 @@ export type Database = {
           price_retail: number | null
           price_wholesale: number | null
           sort_order: number
+          stock_fisico: number | null
+          stock_status: string
           subcategory_id: string
         }
         Insert: {
           active?: boolean
-          badge?: string
           category_id: string
           description?: string | null
           id: string
@@ -263,11 +270,12 @@ export type Database = {
           price_retail?: number | null
           price_wholesale?: number | null
           sort_order?: number
+          stock_fisico?: number | null
+          stock_status?: string
           subcategory_id: string
         }
         Update: {
           active?: boolean
-          badge?: string
           category_id?: string
           description?: string | null
           id?: string
@@ -277,6 +285,8 @@ export type Database = {
           price_retail?: number | null
           price_wholesale?: number | null
           sort_order?: number
+          stock_fisico?: number | null
+          stock_status?: string
           subcategory_id?: string
         }
         Relationships: [
@@ -393,7 +403,44 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      products_with_stock: {
+        Row: {
+          active: boolean | null
+          category_id: string | null
+          category_label: string | null
+          comprometido: number | null
+          description: string | null
+          disponible: number | null
+          en_stock: boolean | null
+          id: string | null
+          image: string | null
+          images: string[] | null
+          name: string | null
+          price_retail: number | null
+          price_wholesale: number | null
+          sort_order: number | null
+          stock_fisico: number | null
+          stock_status: string | null
+          subcategory_id: string | null
+          subcategory_label: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _transition_order_core: {
@@ -431,6 +478,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      committed_stock: { Args: { p_product_id: string }; Returns: number }
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       jwt_role: { Args: never; Returns: string }

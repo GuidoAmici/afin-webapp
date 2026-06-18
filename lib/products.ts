@@ -1,6 +1,10 @@
 import { createPublicClient } from '@/lib/supabase/public'
 
-export type BadgeVariant = 'stock' | 'consult' | 'new'
+/** Eje de display editable en el panel /empleados (#18). */
+export type StockStatus = 'en_stock' | 'consultar' | 'proximamente'
+
+/** Variante visual del badge del catálogo, derivada de stock_status + disponible. */
+export type BadgeVariant = 'stock' | 'consult' | 'new' | 'out'
 
 export interface Subcategory {
   id: string
@@ -25,7 +29,11 @@ export interface Product {
   subcategoryLabel: string
   image: string
   images?: string[]
-  badge: BadgeVariant
+  stockStatus: StockStatus
+  /** físico − comprometido; null cuando el producto no rastrea stock. */
+  disponible: number | null
+  /** true si el catálogo debe mostrarlo como disponible para pedir. */
+  inStock: boolean
   priceRetail?: string
   priceWholesale?: string
   description?: string
@@ -38,12 +46,14 @@ type ProductRow = {
   subcategory_id: string
   image: string
   images: string[] | null
-  badge: string
+  stock_status: string
+  disponible: number | null
+  en_stock: boolean
   price_retail: string | null
   price_wholesale: string | null
   description: string | null
-  category: { label: string }
-  subcategory: { label: string }
+  category_label: string
+  subcategory_label: string
 }
 
 type CategoryRow = {
@@ -55,12 +65,15 @@ type CategoryRow = {
 
 export async function getProducts(): Promise<Product[]> {
   const supabase = createPublicClient()
+  // products_with_stock embebe los labels y calcula disponible/en_stock (físico −
+  // comprometido). La vista es security_invoker, así que la RLS de products sigue
+  // limitando a anon a los activos; el .eq('active', true) es defensa en profundidad.
   const { data, error } = await supabase
-    .from('products')
+    .from('products_with_stock')
     .select<string, ProductRow>(`
-      id, name, category_id, subcategory_id, image, images, badge, price_retail, price_wholesale, description,
-      category:categories!category_id(label),
-      subcategory:subcategories!subcategory_id(label)
+      id, name, category_id, subcategory_id, image, images, stock_status,
+      disponible, en_stock, price_retail, price_wholesale, description,
+      category_label, subcategory_label
     `)
     .eq('active', true)
     .order('sort_order')
@@ -72,15 +85,32 @@ export async function getProducts(): Promise<Product[]> {
     name: p.name,
     category: p.category_id,
     subcategory: p.subcategory_id,
-    categoryLabel: p.category.label,
-    subcategoryLabel: p.subcategory.label,
+    categoryLabel: p.category_label,
+    subcategoryLabel: p.subcategory_label,
     image: p.image,
     images: p.images ?? undefined,
-    badge: p.badge as BadgeVariant,
+    stockStatus: p.stock_status as StockStatus,
+    disponible: p.disponible,
+    inStock: p.en_stock,
     priceRetail: p.price_retail ?? undefined,
     priceWholesale: p.price_wholesale ?? undefined,
     description: p.description ?? undefined,
   }))
+}
+
+/**
+ * Badge del catálogo: compone el display manual (stock_status) con el disponible
+ * derivado. 'consultar'/'proximamente' mandan; 'en_stock' refleja la disponibilidad.
+ */
+export function catalogBadge(product: Pick<Product, 'stockStatus' | 'inStock'>): {
+  variant: BadgeVariant
+  label: string
+} {
+  if (product.stockStatus === 'consultar') return { variant: 'consult', label: 'Consultar' }
+  if (product.stockStatus === 'proximamente') return { variant: 'new', label: 'Próximamente' }
+  return product.inStock
+    ? { variant: 'stock', label: 'En stock' }
+    : { variant: 'out', label: 'Sin stock' }
 }
 
 async function getCategoryRows(): Promise<CategoryRow[]> {
