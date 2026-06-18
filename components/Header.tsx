@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import CartButton from './CartButton'
 import AccountButton from './AccountButton'
@@ -69,8 +69,8 @@ export default function Header() {
             <MenuIcon size={20} />
           </button>
 
-          <Link href="/" className="header-logo">
-            <Image src="/images/logo.png" alt="AFIN srl" width={120} height={44} priority />
+          <Link href="/" className="header-logo" aria-label="afin srl — Inicio">
+            <Logo />
           </Link>
 
           <nav className="header-nav" aria-label="Navegación principal">
