@@ -153,8 +153,12 @@ img { max-width: 100%; display: block; }
   transition: background var(--dur-normal) var(--ease), border-color var(--dur-normal) var(--ease);
 }
 .header-inner { display: flex; align-items: center; height: 64px; gap: 0; }
-.header-logo { cursor: pointer; margin-right: 40px; flex-shrink: 0; }
-.header-logo img { height: 44px; object-fit: contain; }
+.header-logo { cursor: pointer; margin-right: 40px; flex-shrink: 0; display: flex; align-items: center; }
+.header-logo svg { height: 38px; width: auto; display: block; }
+/* En PC el logotipo se muestra más grande. */
+@media (min-width: 1025px) {
+  .header-logo svg { height: 48px; }
+}
 .header-nav { display: flex; gap: 2px; flex: 1; align-items: center; }
 .nav-item { position: relative; }
 .nav-link {
@@ -416,7 +420,7 @@ textarea { resize: vertical; min-height: 100px; }
 .site-footer { background: var(--orange-900); color: #fff; padding: var(--section-y-sm) var(--page-x) 24px; }
 .footer-inner { max-width: 1280px; margin: 0 auto; }
 .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; padding-bottom: 36px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.footer-logo { height: 44px; object-fit: contain; filter: brightness(0) invert(1); margin-bottom: 16px; }
+.footer-logo { height: 40px; width: auto; display: block; filter: brightness(0) invert(1); margin-bottom: 16px; }
 .footer-tagline { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.65; max-width: 320px; margin-bottom: 20px; }
 .footer-contact { display: flex; flex-direction: column; gap: 8px; }
 .footer-contact-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.65); }

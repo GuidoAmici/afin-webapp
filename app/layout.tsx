@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { DM_Sans } from 'next/font/google'
+import { DM_Sans, Nunito } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import { CartProvider } from '@/lib/cart'
 import './globals.css'
@@ -8,6 +8,14 @@ const dmSans = DM_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
+})
+
+// Solo para el logotipo "afin srl" (componente Logo). Se expone como variable CSS.
+const nunito = Nunito({
+  subsets: ['latin'],
+  weight: ['900'],
+  display: 'swap',
+  variable: '--font-nunito',
 })
 
 // NEXT_PUBLIC_SITE_URL se configura en Vercel por entorno:
@@ -55,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Prevent Dark Reader from injecting attributes that cause hydration mismatches */}
         <meta name="darkreader-lock" />
       </head>
-      <body className={dmSans.className}>
+      <body className={`${dmSans.className} ${nunito.variable}`}>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
           <CartProvider>
             {children}

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Image from 'next/image'
+import Logo from '@/components/Logo'
 import NewsletterForm from '@/components/NewsletterForm'
 
 export default function Footer() {
@@ -17,7 +17,7 @@ export default function Footer() {
 
         <div className="footer-grid">
           <div>
-            <Image src="/images/logo.png" alt="AFIN srl" className="footer-logo" width={120} height={44} />
+            <Logo className="footer-logo" />
             <p className="footer-tagline">
               Fábrica argentina de tapas, cierres y envases plásticos para la industria cosmética, farmacéutica y de perfumería.
             </p>
