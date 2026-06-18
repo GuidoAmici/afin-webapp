@@ -52,14 +52,15 @@ REVOKE ALL ON FUNCTION public.committed_stock(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.committed_stock(text) TO anon, authenticated, service_role;
 
 -- ============================================================
--- PRODUCTS_WITH_STOCK: vista del catálogo con disponible/en_stock calculados.
--- security_invoker = true → respeta la RLS de products (anon solo ve active).
--- Los labels de categoría/subcategoría van embebidos para no depender de la
--- detección de FKs de PostgREST sobre la vista.
+-- PRODUCTS_WITH_STOCK: superficie de lectura pública del catálogo.
+-- Corre como owner (no security_invoker) y filtra `active = true` adentro: así
+-- el catálogo anónimo NO necesita acceso de lectura directo a la tabla products
+-- (no se filtra el stock físico crudo). Solo expone `disponible` y `en_stock`
+-- derivados (no `stock_fisico` ni `comprometido`, que son internos). Los labels
+-- de categoría/subcategoría van embebidos para no depender de FKs de PostgREST.
 -- ============================================================
 
-CREATE OR REPLACE VIEW public.products_with_stock
-WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW public.products_with_stock AS
 SELECT
   p.id,
   p.name,
@@ -73,8 +74,6 @@ SELECT
   p.description,
   p.sort_order,
   p.active,
-  p.stock_fisico,
-  cs.comprometido,
   CASE WHEN p.stock_fisico IS NULL
        THEN NULL
        ELSE p.stock_fisico - cs.comprometido
@@ -89,7 +88,8 @@ SELECT
 FROM public.products p
 JOIN public.categories    cat ON cat.id = p.category_id
 JOIN public.subcategories sub ON sub.id = p.subcategory_id
-CROSS JOIN LATERAL (SELECT public.committed_stock(p.id) AS comprometido) cs;
+CROSS JOIN LATERAL (SELECT public.committed_stock(p.id) AS comprometido) cs
+WHERE p.active = true;
 
 GRANT SELECT ON public.products_with_stock TO anon, authenticated;
 

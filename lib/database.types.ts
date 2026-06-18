@@ -408,7 +408,6 @@ export type Database = {
           active: boolean | null
           category_id: string | null
           category_label: string | null
-          comprometido: number | null
           description: string | null
           disponible: number | null
           en_stock: boolean | null
@@ -419,7 +418,6 @@ export type Database = {
           price_retail: number | null
           price_wholesale: number | null
           sort_order: number | null
-          stock_fisico: number | null
           stock_status: string | null
           subcategory_id: string | null
           subcategory_label: string | null
