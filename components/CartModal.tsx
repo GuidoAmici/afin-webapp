@@ -76,7 +76,7 @@ export default function CartModal({ onClose }: Props) {
       .from('orders')
       .select('id, notes, order_items(product_id, quantity, unit_price, products(name, image))')
       .eq('user_id', user.id)
-      .eq('status', 'nuevo')
+      .eq('status', 'pendiente')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
