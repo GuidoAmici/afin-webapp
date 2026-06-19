@@ -36,12 +36,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'perfil_incompleto' }, { status: 422 })
   }
 
-  // Buscar pedido pendiente existente (status = 'nuevo')
+  // Buscar pedido pendiente existente (status = 'pendiente', ver ADR-005 / fase2)
   const { data: existingOrder } = await supabase
     .from('orders')
     .select('id')
     .eq('user_id', user.id)
-    .eq('status', 'nuevo')
+    .eq('status', 'pendiente')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       .single()
 
     if (orderError || !order) {
+      console.error('[orders] insert orders falló:', orderError)
       return NextResponse.json({ error: 'Error al crear el pedido' }, { status: 500 })
     }
     orderId = order.id
