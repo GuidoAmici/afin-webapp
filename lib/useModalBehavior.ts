@@ -59,3 +59,29 @@ export function useModalBehavior(
     }
   }, [active, ref])
 }
+
+/**
+ * Props para el overlay/backdrop de un modal: cierra al clickear el fondo,
+ * pero sólo si el gesto empezó Y terminó sobre el propio overlay. Se usa
+ * `mouseup` (no `click`) porque su `target` es el elemento donde realmente
+ * se soltó el mouse; el `target` de `click` es el ancestro común de
+ * mousedown/mouseup, que sería el overlay aun si un extremo cae en la tarjeta.
+ * Así, una selección que arranca dentro y suelta fuera —o al revés— no cierra.
+ */
+export function useOverlayDismiss(onClose: () => void) {
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
+
+  const downOnOverlay = useRef(false)
+
+  return {
+    onMouseDown: (e: React.MouseEvent) => {
+      downOnOverlay.current = e.target === e.currentTarget
+    },
+    onMouseUp: (e: React.MouseEvent) => {
+      const dismiss = downOnOverlay.current && e.target === e.currentTarget
+      downOnOverlay.current = false
+      if (dismiss) onCloseRef.current()
+    },
+  }
+}
