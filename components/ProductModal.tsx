@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { catalogBadge, type Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
-import { useModalBehavior } from '@/lib/useModalBehavior'
+import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { formatARS } from '@/lib/format'
 
 interface Props {
@@ -34,6 +34,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
   const related = relatedProducts.slice(0, 3)
 
   useModalBehavior(modalRef, onClose, { initialFocus: closeButtonRef })
+  const overlayProps = useOverlayDismiss(onClose)
 
   // Navegación del carrusel con flechas del teclado
   useEffect(() => {
@@ -50,13 +51,12 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
 
   return (
     <div
+      {...overlayProps}
       className="product-modal-overlay"
-      onClick={onClose}
     >
       <div
         ref={modalRef}
         className="product-modal"
-        onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-product-title"

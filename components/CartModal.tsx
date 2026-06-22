@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useCart, type CartItem } from '@/lib/cart'
 import { createClient } from '@/lib/supabase/client'
 import { formatCuit, formatARS } from '@/lib/format'
-import { useModalBehavior } from '@/lib/useModalBehavior'
+import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, ChoiceToggle } from './ui/form'
 import LoginModal from './LoginModal'
 
@@ -59,10 +59,10 @@ export default function CartModal({ onClose }: Props) {
     tipo: 'personal', telefono: '', direccion: '', localidad: '',
     codigo_postal: '', nombre_empresa: '', cuit: '', dni: '',
   })
-  const overlayRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
   useModalBehavior(cardRef, onClose, { active: !loginOpen })
+  const overlayProps = useOverlayDismiss(onClose)
 
   useEffect(() => {
     loadPendingOrder()
@@ -238,8 +238,7 @@ export default function CartModal({ onClose }: Props) {
   return (
     <>
       <div
-        ref={overlayRef}
-        onClick={e => { if (e.target === overlayRef.current) onClose() }}
+        {...overlayProps}
         className="modal-overlay"
         role="dialog" aria-modal="true" aria-label="Carrito"
       >

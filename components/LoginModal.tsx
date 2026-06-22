@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useModalBehavior } from '@/lib/useModalBehavior'
+import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, SubmitBtn } from './ui/form'
 
 type Vista = 'login' | 'registro' | 'confirmacion'
@@ -15,11 +15,11 @@ interface Props {
 
 export default function LoginModal({ onClose, onSuccess, vistaInicial = 'login' }: Props) {
   const [vista, setVista] = useState<Vista>(vistaInicial)
-  const overlayRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
 
   useModalBehavior(cardRef, onClose, { initialFocus: firstInputRef })
+  const overlayProps = useOverlayDismiss(onClose)
 
   // Re-enfocar cuando cambia la vista
   useEffect(() => {
@@ -28,8 +28,7 @@ export default function LoginModal({ onClose, onSuccess, vistaInicial = 'login' 
 
   return (
     <div
-      ref={overlayRef}
-      onClick={e => { if (e.target === overlayRef.current) onClose() }}
+      {...overlayProps}
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
