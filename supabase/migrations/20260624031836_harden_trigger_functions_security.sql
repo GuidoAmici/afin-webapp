@@ -59,6 +59,20 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.set_updated_at()  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+
+-- rls_auto_enable existe en los entornos reales (test/prod) pero NO está
+-- definida por ninguna migración, así que en la DB local que el CI arma desde
+-- cero (job pgTAP) no existe. Guardamos el REVOKE tras un chequeo de existencia
+-- para que aplique donde la función está y se omita donde no.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'rls_auto_enable' AND p.pronargs = 0
+  ) THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated';
+  END IF;
+END $$;
 
 COMMIT;
