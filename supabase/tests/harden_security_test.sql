@@ -39,6 +39,13 @@ SELECT is(
 -- ════════════════════════════════════════════════════════════════════════
 -- #22 — estado inicial del INSERT (como cliente autenticado)
 -- ════════════════════════════════════════════════════════════════════════
+-- En cloud, orders hereda los grants de tabla de authenticated por los default
+-- privileges de Supabase (no están en migrations; ver grant_public_read.sql).
+-- El stack local que arma el CI no los tiene, así que los reproducimos acá (como
+-- postgres) para que el test ejercite la RLS WITH CHECK de #22 y no la mera
+-- ausencia del grant de tabla. La RLS sigue gobernando qué filas pasan.
+GRANT INSERT, SELECT ON public.orders TO authenticated;
+
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   '{"sub":"15151515-1515-1515-1515-151515151515","app_metadata":{"role":"cliente"}}', true);
