@@ -1,6 +1,10 @@
 {
   "name": "afin-webapp",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "npm@11.13.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
