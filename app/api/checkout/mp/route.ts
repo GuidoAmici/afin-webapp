@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createCheckoutPreference } from '@/lib/mercadopago'
 import { NextResponse } from 'next/server'
 import { flags } from '@/lib/flags'
+import { opsFlag } from '@/lib/settings'
 
 // Inicia el checkout con Mercado Pago: fija el monto server-side (prepare_checkout),
 // crea la preference de Checkout Pro y devuelve el init_point para redirigir.
@@ -17,6 +18,14 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+  // Kill switch operativo: lo mueve un admin desde `settings`, sin deploy. Va
+  // después del getUser() porque la policy de lectura exige sesión. A diferencia
+  // del flag de release, esto no es "la feature no existe" sino "los cobros están
+  // pausados ahora" — de ahí el 503 y no un 404.
+  if (!(await opsFlag('payments_enabled'))) {
+    return NextResponse.json({ error: 'cobros_pausados' }, { status: 503 })
+  }
 
   const { orderId } = (await request.json()) as { orderId?: string }
   if (!orderId) return NextResponse.json({ error: 'Falta orderId' }, { status: 400 })

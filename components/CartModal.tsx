@@ -222,7 +222,9 @@ export default function CartModal({ onClose }: Props) {
       })
       const data = await res.json()
       if (!res.ok || !data.initPoint) {
-        setError('No pudimos conectar para iniciar el pago.')
+        setError(data.error === 'cobros_pausados'
+          ? 'El pago online está pausado por el momento. Tu pedido quedó registrado — Andrés te contacta para coordinar el cobro.'
+          : 'No pudimos conectar para iniciar el pago.')
         return
       }
       window.location.href = data.initPoint

@@ -10,7 +10,19 @@ Los dos primeros flags son `pedidos` (carrito, "Agregar al pedido", `POST /api/o
 
 ## Considered Options
 
-**Flags en la tabla `settings`:** se descartó *para estos dos flags*. `settings` ya existe y es el lugar correcto para perillas que Andrés mueve en caliente (descuento por transferencia, datos bancarios), pero un flag de release lo mueve quien deploya, no quien opera, y meterlo en la base agrega una consulta en el camino crítico del render y un estado que difiere entre stg y prod sin quedar registrado en git. Un kill switch operativo de pago —que sí hay que poder apagar sin redeploy— pertenece a `settings`, y queda como trabajo pendiente.
+**Flags en la tabla `settings`:** se descartó *para los flags de release*. Un flag de release lo mueve quien deploya, no quien opera, y meterlo en la base agrega una consulta en el camino crítico del render y un estado que difiere entre stg y prod sin quedar registrado en git.
+
+Pero la distinción corta en dos: los flags que sí tiene que poder mover un admin en caliente —cortar cobros un sábado a la noche— viven en `settings` y se leen desde `lib/settings.ts`. Son dos mecanismos con dos vidas distintas, no uno mejor que el otro:
+
+| | Release toggle | Ops toggle |
+|---|---|---|
+| Vive en | env var, `lib/flags.ts` | `settings`, `lib/settings.ts` |
+| Lo mueve | quien deploya | un admin, desde el panel |
+| Efecto | requiere redeploy | inmediato |
+| Responde | "¿existe la feature acá?" (404) | "¿está operando ahora?" (503) |
+| Vida | corta, se borra al estabilizar | larga, es parte del producto |
+
+Para que algo funcione tienen que estar los dos en on.
 
 **Vercel Edge Config / un servicio de flags:** se descartó por peso: dos flags no justifican una dependencia externa ni un proveedor más en el camino del request.
 
@@ -22,4 +34,7 @@ Los dos primeros flags son `pedidos` (carrito, "Agregar al pedido", `POST /api/o
 - El webhook `/api/webhooks/mp` **no** está detrás de `checkoutMp`, a propósito: si se apaga el checkout con pagos en vuelo, esos pagos igual tienen que poder confirmarse. La ruta ya está protegida por firma HMAC y es idempotente.
 - El panel `/empleados` tampoco está detrás de `pedidos`: AFIN sigue recibiendo pedidos por WhatsApp y cargándolos a mano, así que la cola operativa tiene que existir aunque el canal público esté apagado.
 - Con `pedidos` apagado, el catálogo sigue vivo y la CTA de producto cae a WhatsApp — la degradación es al canal que la fábrica usaba antes del carrito, no a una pantalla rota.
-- Los flags se acumulan si nadie los saca. Un flag de release tiene fecha de vencimiento: cuando la feature está estable en producción, se borra el flag y el código muerto.
+- Los flags se acumulan si nadie los saca. Un flag de release tiene fecha de vencimiento: cuando la feature está estable en producción, se borra el flag y el código muerto. Los ops toggles no vencen — son parte del producto.
+- La escritura de `settings` pasó a ser admin-only, lo que de paso corrige que la policy original chequeaba `= 'empleado'` y dejaba afuera justamente al rol que debe moverla (mismo bug que ADR-008 corrigió en `proxy.ts`). Un `empleado` ya no puede escribir configuración: es una decisión de negocio, no de operación diaria.
+- `opsFlag()` no cachea, a propósito: un kill switch que tarda en hacer efecto no es un kill switch. El costo es una query por PK en el camino del checkout.
+- Los defaults de los ops flags son fail-**open** para `payments_enabled`: si la base no contesta no se cortan los cobros por un hipo de red. Ningún default puede hacer que se cobre de más, así que el riesgo es asimétrico y conviene abrir.

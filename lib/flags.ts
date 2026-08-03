@@ -40,4 +40,16 @@ export const flags = {
    * — un pago ya iniciado tiene que poder confirmarse aunque se corte el checkout.
    */
   checkoutMp: parseFlag(process.env.NEXT_PUBLIC_FF_CHECKOUT_MP, false),
+
+  /**
+   * Panel `/empleados`: administración de catálogo, precios y stock (#18).
+   *
+   * Default `false`: la ruta todavía no existe. Hasta ahora el nav la linkeaba
+   * igual y el empleado comía un 404; el flag es lo que hace que el link aparezca
+   * recién cuando la pantalla exista.
+   */
+  panelProductos: parseFlag(process.env.NEXT_PUBLIC_FF_PANEL_PRODUCTOS, false),
+
+  /** Panel `/empleados`: ficha de clientes. Default `false`, misma razón que arriba. */
+  panelClientes: parseFlag(process.env.NEXT_PUBLIC_FF_PANEL_CLIENTES, false),
 } as const

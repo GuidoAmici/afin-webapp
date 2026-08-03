@@ -1,6 +1,15 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { flags } from '@/lib/flags'
+
+// El nav declara qué flag habilita cada sección; sin flag, siempre visible.
+// Antes linkeaba a /productos y /clientes, que no existen (#18) — 404 desde el nav.
+const NAV_SECTIONS = [
+  { href: '/empleados/pedidos', label: 'Pedidos', enabled: true },
+  { href: '/empleados/productos', label: 'Productos', enabled: flags.panelProductos },
+  { href: '/empleados/clientes', label: 'Clientes', enabled: flags.panelClientes },
+]
 
 export default async function EmpleadosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -37,9 +46,9 @@ export default async function EmpleadosLayout({ children }: { children: React.Re
           <Link href="/empleados" style={{ fontSize: 15, fontWeight: 700, color: 'var(--orange-600)', textDecoration: 'none' }}>
             AFIN
           </Link>
-          <Link href="/empleados/pedidos" style={navLink}>Pedidos</Link>
-          <Link href="/empleados/productos" style={navLink}>Productos</Link>
-          <Link href="/empleados/clientes" style={navLink}>Clientes</Link>
+          {NAV_SECTIONS.filter(s => s.enabled).map(({ href, label }) => (
+            <Link key={href} href={href} style={navLink}>{label}</Link>
+          ))}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
