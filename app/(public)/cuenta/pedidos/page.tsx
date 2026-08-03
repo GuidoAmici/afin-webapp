@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { flags } from '@/lib/flags'
 import { statusMeta, statusTint } from '@/lib/order-status'
 import { paymentMeta, paymentMethodLabel } from '@/lib/payment-status'
 import { formatARS } from '@/lib/format'
@@ -58,6 +59,11 @@ export default function PedidosPage() {
     }
     load()
   }, [router])
+
+  // El historial es parte del canal de pedidos: si el canal no está habilitado en
+  // este entorno, la ruta directamente no existe. Va después de los hooks para no
+  // alterar su orden.
+  if (!flags.pedidos) notFound()
 
   function toggle(id: string) {
     setExpanded(prev => {

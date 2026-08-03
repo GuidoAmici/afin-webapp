@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { CartItem } from '@/lib/cart'
+import { flags } from '@/lib/flags'
 
 async function notifyCallMeBot(message: string) {
   const apiKey = process.env.CALLMEBOT_API_KEY
@@ -13,6 +14,12 @@ async function notifyCallMeBot(message: string) {
 }
 
 export async function POST(request: Request) {
+  // La puerta real del flag: ocultar el carrito no alcanza, el endpoint tiene que
+  // no existir cuando el canal de pedidos está apagado en este entorno.
+  if (!flags.pedidos) {
+    return NextResponse.json({ error: 'no_disponible' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

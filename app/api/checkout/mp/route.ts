@@ -1,10 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { createCheckoutPreference } from '@/lib/mercadopago'
 import { NextResponse } from 'next/server'
+import { flags } from '@/lib/flags'
 
 // Inicia el checkout con Mercado Pago: fija el monto server-side (prepare_checkout),
 // crea la preference de Checkout Pro y devuelve el init_point para redirigir.
 export async function POST(request: Request) {
+  // Apagar el flag corta la creación de preferences — no la confirmación de los
+  // pagos ya iniciados, que sigue entrando por /api/webhooks/mp.
+  if (!flags.checkoutMp) {
+    return NextResponse.json({ error: 'no_disponible' }, { status: 404 })
+  }
+
   const supabase = await createClient()
   const {
     data: { user },

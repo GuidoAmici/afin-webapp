@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { verifyWebhookSignature, getPayment } from '@/lib/mercadopago'
 import { createServiceClient } from '@/lib/supabase/service'
 
+// Deliberadamente NO va detrás de `flags.checkoutMp`: si se apaga el checkout con
+// pagos en vuelo, esos pagos igual tienen que poder confirmarse. La ruta ya está
+// protegida por firma HMAC y es idempotente (ver ADR-0005).
+//
 // Webhook de Mercado Pago (público, server-only). Invariantes (ADR fase 2):
 // 1) valida la firma x-signature; 2) NUNCA toma el monto del payload — lo consulta
 // a la API de MP; 3) idempotente vía provider_payment_id único; 4) recién entonces

@@ -9,6 +9,7 @@ import CartButton from './CartButton'
 import AccountButton from './AccountButton'
 import { ChevronDownIcon, CloseIcon, MenuIcon } from './icons'
 import { useModalBehavior } from '@/lib/useModalBehavior'
+import { flags } from '@/lib/flags'
 
 const NAV_LINKS = [
   { href: '/', label: 'Inicio' },
@@ -110,7 +111,7 @@ export default function Header() {
           <div className="header-actions">
             <ThemeToggle />
             <AccountButton />
-            <CartButton />
+            {flags.pedidos && <CartButton />}
             <Link href="/contacto" className="btn-primary">Contacto</Link>
           </div>
         </div>

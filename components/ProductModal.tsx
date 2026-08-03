@@ -6,6 +6,7 @@ import { catalogBadge, type Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { formatARS } from '@/lib/format'
+import { flags } from '@/lib/flags'
 
 interface Props {
   product: Product
@@ -48,6 +49,12 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
 
   const waMessage = encodeURIComponent(`Hola! Me interesa el producto: ${product.name}`)
   const badge = catalogBadge(product)
+
+  // Con el canal de pedidos apagado el catálogo sigue vivo: la CTA cae a WhatsApp,
+  // que es como AFIN tomaba pedidos antes del carrito.
+  const canOrder = flags.pedidos && product.stockStatus === 'en_stock'
+  const askOnWhatsApp =
+    product.stockStatus === 'consultar' || (!flags.pedidos && product.stockStatus === 'en_stock')
 
   return (
     <div
@@ -130,7 +137,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
               </div>
             </div>
 
-            {product.stockStatus === 'en_stock' && (
+            {canOrder && (
               <>
                 {/* Sin stock disponible no bloquea la compra: el pedido sigue y, al
                     pagar, entra en espera de stock con aviso de demora (ADR-007). */}
@@ -166,7 +173,7 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
                 </div>
               </>
             )}
-            {product.stockStatus === 'consultar' && (
+            {askOnWhatsApp && (
               <a
                 href={`https://wa.me/5491122521639?text=${waMessage}`}
                 target="_blank"
