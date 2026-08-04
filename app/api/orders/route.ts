@@ -29,9 +29,14 @@ async function notifyCallMeBot(message: string) {
   const phone = process.env.CALLMEBOT_PHONE
   if (!apiKey || !phone) return
 
-  const encoded = encodeURIComponent(message)
-  await fetch(`https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encoded}&apikey=${apiKey}`)
-    .catch(() => {}) // fallo silencioso — el pedido ya está guardado
+  // El teléfono se encodea igual que el resto: sin esto, un CALLMEBOT_PHONE con
+  // '+' adelante se convierte en espacio en la query string y no llega nada.
+  const url = new URL('https://api.callmebot.com/whatsapp.php')
+  url.searchParams.set('phone', phone)
+  url.searchParams.set('text', message)
+  url.searchParams.set('apikey', apiKey)
+
+  await fetch(url).catch(() => {}) // fallo silencioso — el pedido ya está guardado
 }
 
 export async function POST(request: Request) {
