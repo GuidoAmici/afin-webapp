@@ -400,8 +400,6 @@ img { max-width: 100%; display: block; }
 .contact-inner { max-width: 600px; margin: 0; }
 .contact-inner h2 { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px; color: var(--fg-1); }
 .contact-inner > p:not(.section-label) { font-size: 15px; color: var(--fg-2); margin-bottom: 36px; }
-.form-group { margin-bottom: 16px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 label { display: block; font-size: 13px; font-weight: 600; color: var(--fg-1); margin-bottom: 6px; }
 input[type="text"], input[type="email"], input[type="tel"], textarea {
   width: 100%; font-size: 14px; color: var(--fg-1); background: var(--bg-card);
@@ -410,13 +408,6 @@ input[type="text"], input[type="email"], input[type="tel"], textarea {
 }
 input:focus, textarea:focus { border-color: var(--orange-500); }
 textarea { resize: vertical; min-height: 100px; }
-.btn-submit { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; background: var(--orange-700); color: #fff; padding: 12px 28px; border-radius: var(--radius-md); border: none; cursor: pointer; transition: background var(--dur-fast) var(--ease); }
-.btn-submit:hover { background: var(--orange-800); }
-.form-success { display: none; background: #D5F4E6; border: 1px solid #9AE6C0; border-radius: var(--radius-lg); padding: 24px 28px; text-align: center; }
-.form-success.visible { display: block; }
-.form-success-icon { font-size: 32px; margin-bottom: 8px; color: var(--success-500); }
-.form-success h3 { font-weight: 700; font-size: 18px; color: var(--success-700); margin-bottom: 4px; }
-.form-success p { font-size: 14px; color: var(--success-700); }
 
 /* ── FOOTER ─────────────────────────────────────────────────── */
 .site-footer { background: var(--orange-900); color: #fff; padding: var(--section-y-sm) var(--page-x) 24px; }
@@ -632,7 +623,6 @@ textarea { resize: vertical; min-height: 100px; }
   .footer-grid       { grid-template-columns: 1fr; }
   .footer-grid > *:last-child { grid-column: auto; }
   .footer-bottom     { flex-direction: column; gap: 8px; text-align: center; padding-right: 0; padding-bottom: 88px; }
-  .form-row          { grid-template-columns: 1fr; }
   .featured-header   { flex-direction: column; align-items: flex-start; gap: 16px; }
 
   .product-modal-body { grid-template-columns: 1fr; }
