@@ -9,8 +9,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: deploy-production
@@ -18,8 +16,9 @@ concurrency:
 
 jobs:
   test:
-    name: Lint + type-check + Playwright (vars producción)
+    name: Lint + typecheck + Playwright (vars producción)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -28,16 +27,22 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Restaurar node_modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
 
       - run: npm ci
       - run: npm run lint
+      - run: npm run typecheck
+      # `setup-node` cachea ~/.npm (las descargas), no .next/cache (el trabajo del
+      # compilador). Sin esto Next recompila todo en cada run. La key incluye el lock
+      # —un bump de Next invalida el cache, que es lo correcto— y el hash de las
+      # fuentes; `restore-keys` reusa el cache anterior cuando sólo cambió el código.
+      - name: Restaurar cache de build de Next
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**/*.[jt]s', 'app/**/*.[jt]sx', 'components/**/*.[jt]sx', 'lib/**/*.[jt]s', 'next.config.*', 'postcss.config.*') }}
+          restore-keys: |
+            next-${{ hashFiles('package-lock.json') }}-
       - run: npm run build
-      - run: npm run type-check
 
       - name: Cargar variables de producción en .env.local
         run: npm install -g vercel@latest && vercel env pull .env.local --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -70,6 +75,7 @@ jobs:
     name: Merge hotfix/* → prod
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
@@ -154,6 +160,7 @@ jobs:
     name: Back-merge hotfix → dev
     needs: deploy-prod
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
@@ -183,6 +190,7 @@ jobs:
       needs.merge-to-prod.result == 'success' &&
       needs.deploy-prod.result == 'failure'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token

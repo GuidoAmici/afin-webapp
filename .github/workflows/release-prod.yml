@@ -10,8 +10,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: deploy-production
@@ -112,6 +110,7 @@ jobs:
     name: Merge stg → prod
     needs: db-migration-prod
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
@@ -137,6 +136,7 @@ jobs:
     name: Promote stg deployment → afinsrl.com.ar
     needs: merge-to-prod
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - run: npm install -g vercel@latest
       - name: Obtener deployment ID de stg.afinsrl.com.ar
