@@ -234,3 +234,59 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: stg
+
+  vercel-deployment:
+    name: Deployment de la integración Vercel
+    # POR QUÉ EXISTE ESTE JOB: hay DOS caminos de deploy corriendo en paralelo
+    # sobre el mismo commit — el job `deploy-preview` de arriba (`vercel build` +
+    # `vercel deploy --prebuilt`, en el runner) y la integración nativa
+    # GitHub↔Vercel, que buildea en la infra de Vercel con su adapter. NO son
+    # equivalentes: en newhaze-webapp el bump a Next 16.3.2 pasó los siete jobs
+    # en verde mientras la integración fallaba con ENOENT en
+    # `.next/next-server.js.nft.json` (vercel/next.js#96646), porque el paso que
+    # rompe sólo existe del lado de Vercel. Nadie miraba ese ❌ salvo el
+    # comentario del bot.
+    #
+    # NO bloquea el deploy: corre en paralelo y sólo observa. Si la integración
+    # está desactivada o todavía no creó el deployment, termina neutro — no
+    # inventa un fallo donde no hay señal.
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    # Este job no necesita el `contents: write` del workflow, sólo leer
+    # deployments. Declararlo acá lo deja en el mínimo.
+    permissions:
+      deployments: read
+    steps:
+      - name: Esperar el estado del deployment de la integración
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            IDS=$(gh api "repos/${{ github.repository }}/deployments?sha=$SHA" --jq '.[].id' || echo "")
+            if [ -z "$IDS" ]; then
+              echo "Sin deployments de la integración para $SHA todavía (intento $i/30)"
+              sleep 20
+              continue
+            fi
+            PENDIENTE=0
+            for id in $IDS; do
+              STATE=$(gh api "repos/${{ github.repository }}/deployments/$id/statuses" --jq '.[0].state // "pending"')
+              echo "deployment $id → $STATE"
+              case "$STATE" in
+                failure|error)
+                  echo "::error::El deployment $id de la integración Vercel falló ($STATE). Revisar el build en Vercel — el deploy por CLI puede estar verde y este no."
+                  exit 1
+                  ;;
+                success|inactive) ;;
+                *) PENDIENTE=1 ;;
+              esac
+            done
+            if [ "$PENDIENTE" -eq 0 ]; then
+              echo "Todos los deployments de la integración terminaron OK."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::notice::La integración Vercel no llegó a un estado terminal en 10 min — sin señal, no se falla el job."
