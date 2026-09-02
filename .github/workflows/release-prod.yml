@@ -30,16 +30,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: stg
-      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          version: 2.109.1
+          node-version: 24
+      # Ver la nota en dev-ci.yml: sin password de DB, sólo el PAT.
       - name: Aplicar migraciones a prod
-        run: |
-          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
-          supabase db push
+        run: node scripts/db-push.mjs
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: myzngskhjnrmnonrksmj
 
   merge-to-prod:
     name: Merge stg → prod
