@@ -44,10 +44,24 @@ jobs:
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.109.1
+      # Stack local desde cero: aplica TODAS las migraciones a una DB vacía
+      # (garantiza reproducibilidad) y corre supabase/tests/*.sql. No toca la DB
+      # de test ni prod: la frontera RLS se valida antes de migrar nada.
       - name: Levantar Postgres local y correr la suite pgTAP
         run: |
           supabase db start
           supabase test db
+      # Database-first: los tipos commiteados tienen que coincidir con el schema
+      # que producen las migraciones. Se genera desde el stack LOCAL —con las
+      # migraciones de ESTE commit ya aplicadas por `db start`— y se compara con
+      # el archivo del repo. Antes `gen-types` apuntaba al proyecto remoto, así
+      # que los tipos podían coincidir con un cambio hecho a mano en la DB que no
+      # estaba en supabase/migrations/. `--no-index` da un diff legible y sale
+      # con código != 0 si hay drift.
+      - name: Tipos generados = migraciones (database-first)
+        run: |
+          supabase gen types typescript --local > /tmp/types.generated.ts
+          git --no-pager diff --no-index --exit-code lib/database.types.ts /tmp/types.generated.ts
 
   deploy-preview:
     name: Build + Deploy preview dev → Vercel
