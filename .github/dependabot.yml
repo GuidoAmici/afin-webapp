@@ -1,0 +1,19 @@
+# Mantiene los pins a SHA de las GitHub Actions al día SIN deriva silenciosa:
+# cuando sale una release nueva, Dependabot abre UN PR (agrupado) que bumpea el
+# SHA con el changelog al lado, y el CI corre contra el cambio antes de mergear.
+# Así la elección de versión es una decisión revisada, no un tag que se mueve
+# solo — que es lo que rate-limiteaba a supabase/setup-cli y rompía el pgTAP
+# (issue #36).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      # `ci:` → release-please no lo cuenta como cambio releaseable
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
