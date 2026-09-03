@@ -10,48 +10,114 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  db-migration-prod:
-    name: DB migration prod
+  # Un cambio de copy y una migración de esquema no son el mismo riesgo: el
+  # código se revierte con un merge, una migración aplicada a la DB de producción
+  # no. El gate deja salir solo al primero y manda el segundo a un humano.
+  gate:
+    name: ¿Sale solo o espera a un humano?
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
       startsWith(github.head_ref, 'release-please--branches--stg'))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      seguir: ${{ steps.decidir.outputs.seguir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Decidir
+        id: decidir
+        run: |
+          # Un workflow_dispatch quiere decir que un humano ya decidió: el gate
+          # no aplica. Es la vía para los releases con migraciones.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "seguir=true" >> "$GITHUB_OUTPUT"
+            echo "Disparo manual: el gate de migraciones no aplica." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Fail-closed a propósito: si el fetch o el diff fallan, el paso corta
+          # y `seguir` nunca se escribe, así que el release NO sale. Un gate que
+          # perdió la capacidad de mirar tiene que frenar, no dejar pasar.
+          set -euo pipefail
+          git fetch origin prod stg --quiet
+          git rev-parse --verify origin/prod >/dev/null
+          git rev-parse --verify origin/stg >/dev/null
+
+          COMMITS=$(git rev-list --count origin/prod..origin/stg)
+          if [ "$COMMITS" -eq 0 ]; then
+            echo "seguir=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Nada que releasear"
+              echo "\`prod\` ya tiene todo lo de \`stg\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          MIGRACIONES=$(git diff --name-only origin/prod..origin/stg -- supabase/migrations)
+
+          if [ -z "$MIGRACIONES" ]; then
+            echo "seguir=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Sale solo"
+              echo "$COMMITS commit(s) y ninguna migración en \`prod..stg\`. Release automático."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "seguir=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Espera a un humano"
+              echo "El diff \`prod..stg\` trae migraciones, que no se revierten con un merge:"
+              echo '```'
+              echo "$MIGRACIONES"
+              echo '```'
+              echo "Para salir igual:"
+              echo '```bash'
+              echo "gh workflow run release-prod.yml --repo ${GITHUB_REPOSITORY}"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  db-migration-prod:
+    name: DB migration prod
+    needs: gate
+    if: needs.gate.outputs.seguir == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: prod
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: stg
-      - uses: supabase/setup-cli@v2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          version: latest
+          node-version: 24
+      # Ver la nota en dev-ci.yml: sin password de DB, sólo el PAT.
       - name: Aplicar migraciones a prod
-        run: |
-          supabase link --project-ref myzngskhjnrmnonrksmj --password "$SUPABASE_DB_PASSWORD"
-          supabase db push
+        run: node scripts/db-push.mjs
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.AFIN_SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: myzngskhjnrmnonrksmj
 
   merge-to-prod:
     name: Merge stg → prod
     needs: db-migration-prod
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
@@ -70,6 +136,7 @@ jobs:
     name: Promote stg deployment → afinsrl.com.ar
     needs: merge-to-prod
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - run: npm install -g vercel@latest
       - name: Obtener deployment ID de stg.afinsrl.com.ar
