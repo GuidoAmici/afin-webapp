@@ -9,6 +9,7 @@ import { formatCuit, formatARS } from '@/lib/format'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, ChoiceToggle } from './ui/form'
 import LoginModal from './LoginModal'
+import { flags } from '@/lib/flags'
 
 type Vista = 'carrito' | 'perfil' | 'confirmado'
 type TipoFacturacion = 'personal' | 'empresa'
@@ -221,7 +222,9 @@ export default function CartModal({ onClose }: Props) {
       })
       const data = await res.json()
       if (!res.ok || !data.initPoint) {
-        setError('No pudimos conectar para iniciar el pago.')
+        setError(data.error === 'cobros_pausados'
+          ? 'El pago online está pausado por el momento. Tu pedido quedó registrado — Andrés te contacta para coordinar el cobro.'
+          : 'No pudimos conectar para iniciar el pago.')
         return
       }
       window.location.href = data.initPoint
@@ -423,17 +426,27 @@ export default function CartModal({ onClose }: Props) {
                 Pedido: <strong>{orderId.slice(0, 8).toUpperCase()}</strong>
               </p>
               {error && <div style={{ marginBottom: 12 }}><ErrorMsg>{error}</ErrorMsg></div>}
-              <button
-                onClick={handlePagarMP}
-                disabled={loading}
-                className="btn-block"
-                style={{ marginBottom: 10 }}
-              >
-                {loading ? 'Redirigiendo…' : 'Pagar con Mercado Pago'}
-              </button>
-              <button onClick={onClose} className="btn-text" style={{ color: 'var(--fg-3)' }}>
-                Pagar más tarde
-              </button>
+              {flags.checkoutMp ? (
+                <>
+                  <button
+                    onClick={handlePagarMP}
+                    disabled={loading}
+                    className="btn-block"
+                    style={{ marginBottom: 10 }}
+                  >
+                    {loading ? 'Redirigiendo…' : 'Pagar con Mercado Pago'}
+                  </button>
+                  <button onClick={onClose} className="btn-text" style={{ color: 'var(--fg-3)' }}>
+                    Pagar más tarde
+                  </button>
+                </>
+              ) : (
+                // Sin pago online el pedido queda igual de válido: Andrés coordina el
+                // cobro por fuera del sitio.
+                <button onClick={onClose} className="btn-block">
+                  Listo
+                </button>
+              )}
             </div>
           )}
         </div>

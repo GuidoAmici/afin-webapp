@@ -506,6 +506,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      replace_order_items: {
+        Args: { p_items: Json; p_notes?: string; p_order_id: string }
+        Returns: undefined
+      }
       transition_order: {
         Args: {
           p_axis: string
