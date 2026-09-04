@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseFlag } from './flags'
+import { parseFlag } from './parse-flag'
 
 describe('parseFlag', () => {
   it('cae al default cuando la var no está definida o está vacía', () => {

@@ -5,7 +5,7 @@ import { useRouter, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { flags } from '@/lib/flags'
+import { pedidos } from '@/lib/pedidos-flag'
 import { statusMeta, statusTint } from '@/lib/order-status'
 import { paymentMeta, paymentMethodLabel } from '@/lib/payment-status'
 import { formatARS } from '@/lib/format'
@@ -61,9 +61,8 @@ export default function PedidosPage() {
   }, [router])
 
   // El historial es parte del canal de pedidos: si el canal no está habilitado en
-  // este entorno, la ruta directamente no existe. Va después de los hooks para no
-  // alterar su orden.
-  if (!flags.pedidos) notFound()
+  // este entorno, la ruta directamente no existe.
+  if (!pedidos) notFound()
 
   function toggle(id: string) {
     setExpanded(prev => {

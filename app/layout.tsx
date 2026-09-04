@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Nunito } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
+import { Analytics } from '@vercel/analytics/next'
 import { CartProvider } from '@/lib/cart'
 import './globals.css'
 
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </CartProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )

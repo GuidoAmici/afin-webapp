@@ -9,7 +9,6 @@ import { formatCuit, formatARS } from '@/lib/format'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, ChoiceToggle } from './ui/form'
 import LoginModal from './LoginModal'
-import { flags } from '@/lib/flags'
 
 type Vista = 'carrito' | 'perfil' | 'confirmado'
 type TipoFacturacion = 'personal' | 'empresa'
@@ -55,6 +54,9 @@ export default function CartModal({ onClose }: Props) {
   const [error, setError] = useState('')
   const [orderId, setOrderId] = useState('')
   const [wasUpdated, setWasUpdated] = useState(false)
+  // Llega en la respuesta de POST /api/orders — recién hace falta acá, en la
+  // vista "confirmado" (ver ADR-0006 sobre por qué no viaja por un provider global).
+  const [checkoutMp, setCheckoutMp] = useState(false)
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null | 'loading'>('loading')
   const [form, setForm] = useState<ProfileForm>({
     tipo: 'personal', telefono: '', direccion: '', localidad: '',
@@ -202,6 +204,7 @@ export default function CartModal({ onClose }: Props) {
       }
       setOrderId(data.orderId)
       setWasUpdated(!!data.wasUpdated)
+      setCheckoutMp(!!data.checkoutMp)
       clear()
       setVista('confirmado')
     } catch {
@@ -426,7 +429,7 @@ export default function CartModal({ onClose }: Props) {
                 Pedido: <strong>{orderId.slice(0, 8).toUpperCase()}</strong>
               </p>
               {error && <div style={{ marginBottom: 12 }}><ErrorMsg>{error}</ErrorMsg></div>}
-              {flags.checkoutMp ? (
+              {checkoutMp ? (
                 <>
                   <button
                     onClick={handlePagarMP}

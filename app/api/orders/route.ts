@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { CartItem } from '@/lib/cart'
-import { flags } from '@/lib/flags'
+import { pedidos } from '@/lib/pedidos-flag'
+import { checkoutMp } from '@/lib/flags'
 
 /** Fila de `order_items` tal como se relee para poder restaurarla intacta. */
 type PreviousItem = {
@@ -42,7 +43,7 @@ async function notifyCallMeBot(message: string) {
 export async function POST(request: Request) {
   // La puerta real del flag: ocultar el carrito no alcanza, el endpoint tiene que
   // no existir cuando el canal de pedidos está apagado en este entorno.
-  if (!flags.pedidos) {
+  if (!pedidos) {
     return NextResponse.json({ error: 'no_disponible' }, { status: 404 })
   }
 
@@ -181,5 +182,9 @@ export async function POST(request: Request) {
     `${emoji} ${accion}\n${clienteNombre}\n${profile.telefono}\n\n${resumen}\n\nVer: ${origin}/empleados/pedidos/${orderId}`
   )
 
-  return NextResponse.json({ orderId, wasUpdated })
+  // CartModal necesita este flag recién en la vista "confirmado" (para mostrar o
+  // no el botón de pago) — va en la misma respuesta para no pagar un round-trip
+  // extra. checkoutMp vive en lib/flags.ts (SDK): a diferencia de `pedidos`, acá
+  // no cuesta ISR porque este endpoint ya era dinámico.
+  return NextResponse.json({ orderId, wasUpdated, checkoutMp: await checkoutMp() })
 }

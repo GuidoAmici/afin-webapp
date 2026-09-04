@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import LoginModal from './LoginModal'
 import { OrdersIcon, UserIcon, SignOutIcon } from './icons'
-import { flags } from '@/lib/flags'
+import { pedidos } from '@/lib/pedidos-flag'
 
 export default function AccountButton() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
@@ -109,7 +109,7 @@ export default function AccountButton() {
                     <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
                   </>
                 )}
-                {flags.pedidos && (
+                {pedidos && (
                   <Link href="/cuenta/pedidos" role="menuitem" onClick={() => setDropdownOpen(false)} style={linkItemStyle}>
                     <OrdersIcon size={14} style={{ flexShrink: 0 }} /> Mis pedidos
                   </Link>

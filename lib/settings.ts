@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { parseFlag } from '@/lib/flags'
+import { parseFlag } from '@/lib/parse-flag'
 
 /**
  * Ops flags: los que mueve un admin desde la base, en caliente y sin deploy.
@@ -8,9 +8,10 @@ import { parseFlag } from '@/lib/flags'
  * sola (ADR-004) y hay que llamarlo **después** de verificar la sesión: la policy
  * de lectura exige `auth.uid() IS NOT NULL`.
  *
- * Los flags de release (env vars) están en `lib/flags.ts`. Un flag de release
- * decide si la feature existe en este entorno; un ops flag decide si está
- * operando ahora. Para que algo funcione tienen que estar los dos en on.
+ * Los flags de release están en `lib/flags.ts` (Vercel Flags SDK, ver ADR-0006).
+ * Un flag de release decide si la feature existe en este entorno; un ops flag
+ * decide si está operando ahora. Para que algo funcione tienen que estar los dos
+ * en on.
  */
 
 export type OpsFlagName = 'payments_enabled' | 'transfer_enabled' | 'order_expiry_enabled'

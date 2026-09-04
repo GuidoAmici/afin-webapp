@@ -6,7 +6,7 @@ import { catalogBadge, type Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { formatARS } from '@/lib/format'
-import { flags } from '@/lib/flags'
+import { pedidos } from '@/lib/pedidos-flag'
 
 interface Props {
   product: Product
@@ -52,9 +52,9 @@ export default function ProductModal({ product, relatedProducts, onClose, onSele
 
   // Con el canal de pedidos apagado el catálogo sigue vivo: la CTA cae a WhatsApp,
   // que es como AFIN tomaba pedidos antes del carrito.
-  const canOrder = flags.pedidos && product.stockStatus === 'en_stock'
+  const canOrder = pedidos && product.stockStatus === 'en_stock'
   const askOnWhatsApp =
-    product.stockStatus === 'consultar' || (!flags.pedidos && product.stockStatus === 'en_stock')
+    product.stockStatus === 'consultar' || (!pedidos && product.stockStatus === 'en_stock')
 
   return (
     <div
