@@ -1,4 +1,6 @@
-name: Hotfix — test + merge to prod + back-merge dev
+# dev se retiró (ver docs/adr): el backmerge pasa a stg, que ahora es la única
+# rama por debajo de prod.
+name: Hotfix — test + merge to prod + back-merge stg
 
 on:
   push:
@@ -156,8 +158,8 @@ jobs:
           done
           echo "::error::Timeout: el deployment no llegó a READY en 5 minutos" && exit 1
 
-  back-merge-dev:
-    name: Back-merge hotfix → dev
+  back-merge-stg:
+    name: Back-merge hotfix → stg
     needs: deploy-prod
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -173,14 +175,14 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Merge hotfix → dev
+      - name: Merge hotfix → stg
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout dev
-          git pull origin dev
-          git merge origin/${{ github.ref_name }} --no-ff -m "chore: back-merge ${{ github.ref_name }} → dev"
-          git push origin dev
+          git checkout stg
+          git pull origin stg
+          git merge origin/${{ github.ref_name }} --no-ff -m "chore: back-merge ${{ github.ref_name }} → stg"
+          git push origin stg
 
   rollback-prod:
     name: Rollback prod

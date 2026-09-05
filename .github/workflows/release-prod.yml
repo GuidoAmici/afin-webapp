@@ -1,15 +1,33 @@
+# Se dispara de dos formas:
+#
+#   1. Automático: stg-ci.yml lo invoca (workflow_call) tras terminar verde en
+#      un push a stg — PERO sólo si el diff prod..stg NO trae migraciones
+#      nuevas. Un cambio de landing, copy o UI sale solo; uno que toca la base
+#      espera a un humano. La diferencia es la reversibilidad: el código se
+#      revierte con un merge, una migración aplicada a la DB de producción no.
+#   2. A mano (workflow_dispatch), que ignora ese gate: es la vía para los
+#      releases con migraciones, y la que se usa cuando se quiere mirar antes.
+#
+# Antes esto se disparaba por el evento `pull_request: closed` en stg,
+# filtrando por head_ref del Release PR — acoplado a que GitHub dispare ese
+# evento y a que el nombre matchee. `workflow_call` desde el mismo run que ya
+# deployó a stg es más confiable (ver docs/adr).
+#
+# El gate vive en el job `gate`. Si frena, deja escrito en el summary qué
+# migraciones lo frenaron y cómo disparar el release a mano.
 name: Release — promote stg → prod
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - stg
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      automatico:
+        description: "Si es true, aplica el gate de migraciones."
+        type: boolean
+        default: true
 
 permissions:
   contents: write
-
 
 concurrency:
   group: deploy-production
@@ -21,10 +39,6 @@ jobs:
   # no. El gate deja salir solo al primero y manda el segundo a un humano.
   gate:
     name: ¿Sale solo o espera a un humano?
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.merged == true &&
-      startsWith(github.head_ref, 'release-please--branches--stg'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -36,9 +50,10 @@ jobs:
       - name: Decidir
         id: decidir
         run: |
-          # Un workflow_dispatch quiere decir que un humano ya decidió: el gate
-          # no aplica. Es la vía para los releases con migraciones.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # En una llamada desde stg-ci.yml, `automatico` llega true y el gate
+          # aplica. En un workflow_dispatch el input no existe, así que un
+          # humano decidió salir: el gate no aplica.
+          if [ "${{ inputs.automatico }}" != "true" ]; then
             echo "seguir=true" >> "$GITHUB_OUTPUT"
             echo "Disparo manual: el gate de migraciones no aplica." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -99,7 +114,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      # Ver la nota en dev-ci.yml: sin password de DB, sólo el PAT.
+      # Ver la nota en stg-ci.yml: sin password de DB, sólo el PAT.
       - name: Aplicar migraciones a prod
         run: node scripts/db-push.mjs
         env:
@@ -127,9 +142,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout prod
           git pull origin prod
-          TITLE="${{ github.event.pull_request.title }}"
-          MESSAGE="chore: promote stg → prod${TITLE:+ ($TITLE)}"
-          git merge origin/stg --no-ff -m "$MESSAGE"
+          git merge origin/stg --no-ff -m "chore: promote stg → prod (${GITHUB_SHA::7})"
           git push origin prod
 
   promote-prod:

@@ -1,0 +1,403 @@
+# Antes: dev → stg → prod, con el CI corriendo solo en push a dev (un PR a dev
+# no disparaba ningún check) y un merge-to-stg por bot en el medio. Colapsado a
+# 2 ramas (stg → prod), portado de newhaze-webapp — ver docs/adr para el detalle
+# de qué se portó y qué no (el hotfix de afin es superior al de newhaze y se
+# dejó como estaba).
+#
+# El pipeline corre en pull_request y en push contra stg: el PR ya ve preview +
+# E2E antes de mergear, no solo después. Este repo es privado en plan free, así
+# que no hay required status checks de GitHub — el gate acá es de visibilidad
+# (el check se ve rojo en el PR), no un bloqueo técnico duro.
+#
+# release-please abre Y mergea su propio Release PR en cada push verde (sin
+# esperar a un humano). El release a prod se dispara por workflow_call directo
+# a release-prod.yml en el mismo run — no por un evento de GitHub que dependa
+# de matchear un head_ref, que es más fràgil.
+name: Stg CI — checks + migraciones + deploy
+
+on:
+  pull_request:
+    branches: [stg]
+  push:
+    branches: [stg]
+
+# contents: write porque dos jobs escriben: release-please (tags y Release PR)
+# y el release a prod (merge stg → prod, vía el workflow invocado).
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Lint + tipos + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  pgtap:
+    name: pgTAP (transition_order + RLS)
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.109.1
+      # Stack local desde cero: aplica TODAS las migraciones a una DB vacía
+      # (garantiza reproducibilidad) y corre supabase/tests/*.sql. No toca la DB
+      # de test ni prod: la frontera RLS se valida antes de migrar nada.
+      - name: Levantar Postgres local y correr la suite pgTAP
+        run: |
+          supabase db start
+          supabase test db
+      # Database-first: los tipos commiteados tienen que coincidir con el schema
+      # que producen las migraciones. Se genera desde el stack LOCAL —con las
+      # migraciones de ESTE PR ya aplicadas por `db start`— y se compara con
+      # el archivo del repo. `--no-index` da un diff legible y sale con código
+      # != 0 si hay drift.
+      - name: Tipos generados = migraciones (database-first)
+        run: |
+          supabase gen types typescript --local > /tmp/types.generated.ts
+          git --no-pager diff --no-index --exit-code lib/database.types.ts /tmp/types.generated.ts
+
+  migrate-stg:
+    name: Migraciones → DB de test
+    # Corre tanto en push como en pull_request: así el preview del PR ve el
+    # schema del PR sin esperar el merge.
+    #
+    # Excepción Dependabot: GitHub aísla los secrets de sus PRs en un scope
+    # propio, así que SUPABASE_ACCESS_TOKEN llega vacío y db-push.mjs aborta.
+    # Es a propósito — un bot que actualiza dependencias no debe recibir
+    # credenciales de la DB, y un bump nunca toca supabase/migrations/, así que
+    # el schema de test ya es el que el preview necesita.
+    if: github.actor != 'dependabot[bot]'
+    needs: [checks, pgtap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: stg
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # Management API + PAT en vez de `supabase link --password`: migrar no
+      # necesita la credencial de mayor privilegio del proyecto, y ésa no tiene
+      # por qué pasar por un runner.
+      - name: Aplicar migraciones a la DB de test
+        run: node scripts/db-push.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: wbsvxdquzvsawmjoiwat
+
+  deploy-preview:
+    name: Build + Deploy preview (PR) → Vercel
+    # Gate del PR: el preview ya corrió migrate-stg (mismo `if` de
+    # pull_request), así que ve el schema del PR sin esperar el merge.
+    if: github.event_name == 'pull_request'
+    needs: migrate-stg
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.verify.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g vercel@latest
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Build
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Deploy
+        id: deploy
+        run: |
+          set -euo pipefail
+          RESULT=$(vercel deploy --prebuilt --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Verificar deployment READY
+        id: verify
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            if [ "$STATE" = "READY" ]; then
+              URL=$(echo "$RESPONSE" | jq -r '.url')
+              echo "url=https://$URL" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el deployment preview no llegó a READY en 5 minutos" && exit 1
+
+  deploy-stg:
+    name: Build + Deploy stg → Vercel
+    if: github.event_name == 'push'
+    needs: migrate-stg
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.verify.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install -g vercel@latest
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Build
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Deploy
+        id: deploy
+        run: |
+          set -euo pipefail
+          RESULT=$(vercel deploy --prebuilt --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Verificar deployment READY
+        id: verify
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            if [ "$STATE" = "READY" ]; then
+              URL=$(echo "$RESPONSE" | jq -r '.url')
+              echo "url=https://$URL" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el deployment stg no llegó a READY en 5 minutos" && exit 1
+
+  vercel-deployment:
+    name: Deployment de la integración Vercel
+    # POR QUÉ EXISTE ESTE JOB: hay DOS caminos de deploy corriendo en paralelo
+    # sobre el mismo commit — el job `deploy-preview`/`deploy-stg` de arriba
+    # (`vercel build` + `vercel deploy --prebuilt`, en el runner) y la
+    # integración nativa GitHub↔Vercel, que buildea en la infra de Vercel con
+    # su adapter. NO son equivalentes: en newhaze-webapp el bump a Next 16.3.2
+    # pasó los siete jobs en verde mientras la integración fallaba con ENOENT
+    # en `.next/next-server.js.nft.json` (vercel/next.js#96646), porque el
+    # paso que rompe sólo existe del lado de Vercel. Nadie miraba ese ❌ salvo
+    # el comentario del bot.
+    #
+    # NO bloquea el deploy: corre en paralelo y sólo observa. Si la integración
+    # está desactivada o todavía no creó el deployment, termina neutro — no
+    # inventa un fallo donde no hay señal.
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    # Este job no necesita el `contents: write` del workflow, sólo leer
+    # deployments. Declararlo acá lo deja en el mínimo.
+    permissions:
+      deployments: read
+    steps:
+      - name: Esperar el estado del deployment de la integración
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            IDS=$(gh api "repos/${{ github.repository }}/deployments?sha=$SHA" --jq '.[].id' || echo "")
+            if [ -z "$IDS" ]; then
+              echo "Sin deployments de la integración para $SHA todavía (intento $i/30)"
+              sleep 20
+              continue
+            fi
+            PENDIENTE=0
+            for id in $IDS; do
+              STATE=$(gh api "repos/${{ github.repository }}/deployments/$id/statuses" --jq '.[0].state // "pending"')
+              echo "deployment $id → $STATE"
+              case "$STATE" in
+                failure|error)
+                  echo "::error::El deployment $id de la integración Vercel falló ($STATE). Revisar el build en Vercel — el deploy por CLI puede estar verde y este no."
+                  exit 1
+                  ;;
+                success|inactive) ;;
+                *) PENDIENTE=1 ;;
+              esac
+            done
+            if [ "$PENDIENTE" -eq 0 ]; then
+              echo "Todos los deployments de la integración terminaron OK."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::notice::La integración Vercel no llegó a un estado terminal en 10 min — sin señal, no se falla el job."
+
+  e2e:
+    name: Playwright — gate en PR / detección en push
+    # Corre tras el deploy que haya aplicado (deploy-preview en PR, deploy-stg
+    # en push) — el otro siempre está skipped por su propio `if` de evento, así
+    # que `always()` es necesario para no heredar ese skip.
+    needs: [deploy-preview, deploy-stg]
+    if: always() && (needs.deploy-preview.result == 'success' || needs.deploy-stg.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Restaurar browsers de Playwright
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - run: npm ci
+      - name: Instalar browsers (solo si no hay caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Correr tests contra el deploy que haya aplicado
+        run: npx playwright test
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.url || needs.deploy-stg.outputs.url }}
+      - name: Subir reporte
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  promote-stg:
+    name: Promote deploy → stg.afinsrl.com.ar
+    # Solo en push: alía el dominio real de stg al deployment que se acaba de
+    # mergear. En un PR, deploy-preview usa un preview normal — aliasear el
+    # dominio de stg con un preview sin mergear pisaría el ambiente real.
+    # Espera a e2e a propósito (como en el workflow anterior): no tiene sentido
+    # apuntar el dominio real a un deployment que no pasó Playwright.
+    if: github.event_name == 'push'
+    needs: [deploy-stg, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: npm install -g vercel@latest
+      - name: Desvincular stg.afinsrl.com.ar de git branch
+        run: |
+          curl -sf -X PATCH \
+            "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"gitBranch": null}'
+      - name: Asignar alias stg al deployment
+        run: |
+          curl -sf -X POST \
+            "https://api.vercel.com/v2/deployments/${{ needs.deploy-stg.outputs.deployment_id }}/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"alias": "stg.afinsrl.com.ar"}'
+
+  release-please:
+    name: Release automático → stg
+    if: github.event_name == 'push'
+    needs: promote-stg
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: stg
+      # Se busca el Release PR abierto en vez de usar steps.release.outputs.pr:
+      # cuando el PR ya existía y este push no lo modifica (p. ej. commits ci:),
+      # la acción no emite output y el PR quedaría colgado sin mergear.
+      # El merge con GITHUB_TOKEN no re-dispara este workflow: el commit de
+      # release (package.json + CHANGELOG + manifest) no genera un push nuevo
+      # con otro actor, así que no hay loop.
+      - name: Auto-merge del Release PR
+        id: automerge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr=$(gh pr list --repo ${{ github.repository }} --state open \
+            --json number,headRefName \
+            -q '.[] | select(.headRefName | startswith("release-please--branches--stg")) | .number' \
+            | head -1)
+          if [ -n "$pr" ]; then
+            gh pr merge "$pr" --squash --repo ${{ github.repository }}
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No hay Release PR abierto — nada que mergear."
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Tag + GitHub Release del PR recién mergeado
+        if: steps.automerge.outputs.merged == 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: stg
+
+  auto-release:
+    name: Release automático → prod
+    needs: [deploy-stg, e2e]
+    if: >-
+      always() && github.event_name == 'push'
+      && needs.deploy-stg.result == 'success'
+      && needs.e2e.result == 'success'
+    # `issues: write` además del `contents: write` del workflow: el paso final
+    # de release-prod etiqueta como `en-prod` los issues que promovió. Un
+    # workflow reusable no puede elevar permisos por encima de quien lo llama.
+    permissions:
+      contents: write
+      issues: write
+    uses: ./.github/workflows/release-prod.yml
+    secrets: inherit
