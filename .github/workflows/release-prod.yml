@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: deploy-production
@@ -126,6 +127,8 @@ jobs:
     needs: db-migration-prod
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      prod_antes: ${{ steps.merge.outputs.prod_antes }}
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
@@ -137,13 +140,55 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
       - name: Merge stg → prod
+        id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout prod
           git pull origin prod
+          # Se guarda ANTES del merge: es el extremo viejo del rango que se está
+          # promoviendo. Después del push, prod == stg y el rango ya no se puede
+          # reconstruir desde el estado del repo.
+          echo "prod_antes=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git merge origin/stg --no-ff -m "chore: promote stg → prod (${GITHUB_SHA::7})"
           git push origin prod
+
+      - name: Etiquetar issues promovidos como en-prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROD_ANTES: ${{ steps.merge.outputs.prod_antes }}
+        run: |
+          # No fail-fast: un issue que no se puede etiquetar (label borrado, PR
+          # de otro repo, o un número que resultó ser un issue y no un PR) no
+          # debe tumbar un release que ya se aplicó. Mejor una etiqueta que
+          # falta que un merge revertido.
+          #
+          # El patrón de subject varía según cómo se mergeó cada PR a stg (squash
+          # deja "... (#NN)"; merge commit deja "Merge pull request #NN from ...");
+          # se extrae cualquier "#NN" del subject y se prueba como número de PR.
+          # `gh pr view` sobre un número que resulta ser un issue falla solo y
+          # se ignora — heurística tolerante a falsos positivos, no exacta.
+          VERSION="v$(node -p "require('./package.json').version")"
+          PRS=$(git log "${PROD_ANTES}..HEAD" --format=%s \
+            | grep -oE '#[0-9]+' | grep -oE '[0-9]+' | sort -un)
+
+          if [ -z "$PRS" ]; then
+            echo "Sin referencias a PR/issue en el rango promovido."
+            exit 0
+          fi
+
+          for PR in $PRS; do
+            ISSUES=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+              --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[].number' 2>/dev/null || true)
+            for ISSUE in $ISSUES; do
+              gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label en-prod \
+                || echo "::warning::no se pudo etiquetar #$ISSUE (PR #$PR) — label en-prod inexistente o issue en otro repo"
+              gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+                --body "Promovido a producción en \`afin-webapp $VERSION\` (release: stg → prod, $(date -u +%Y-%m-%d))." \
+                || true
+            done
+          done
 
   promote-prod:
     name: Promote stg deployment → afinsrl.com.ar
