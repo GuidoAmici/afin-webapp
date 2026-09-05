@@ -1,15 +1,34 @@
+# Se dispara de dos formas:
+#
+#   1. Automático: stg-ci.yml lo invoca (workflow_call) tras terminar verde en
+#      un push a stg — PERO sólo si el diff prod..stg NO trae migraciones
+#      nuevas. Un cambio de landing, copy o UI sale solo; uno que toca la base
+#      espera a un humano. La diferencia es la reversibilidad: el código se
+#      revierte con un merge, una migración aplicada a la DB de producción no.
+#   2. A mano (workflow_dispatch), que ignora ese gate: es la vía para los
+#      releases con migraciones, y la que se usa cuando se quiere mirar antes.
+#
+# Antes esto se disparaba por el evento `pull_request: closed` en stg,
+# filtrando por head_ref del Release PR — acoplado a que GitHub dispare ese
+# evento y a que el nombre matchee. `workflow_call` desde el mismo run que ya
+# deployó a stg es más confiable (ver docs/adr).
+#
+# El gate vive en el job `gate`. Si frena, deja escrito en el summary qué
+# migraciones lo frenaron y cómo disparar el release a mano.
 name: Release — promote stg → prod
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - stg
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      automatico:
+        description: "Si es true, aplica el gate de migraciones."
+        type: boolean
+        default: true
 
 permissions:
   contents: write
-
+  issues: write
 
 concurrency:
   group: deploy-production
@@ -21,10 +40,6 @@ jobs:
   # no. El gate deja salir solo al primero y manda el segundo a un humano.
   gate:
     name: ¿Sale solo o espera a un humano?
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.merged == true &&
-      startsWith(github.head_ref, 'release-please--branches--stg'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -36,9 +51,10 @@ jobs:
       - name: Decidir
         id: decidir
         run: |
-          # Un workflow_dispatch quiere decir que un humano ya decidió: el gate
-          # no aplica. Es la vía para los releases con migraciones.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # En una llamada desde stg-ci.yml, `automatico` llega true y el gate
+          # aplica. En un workflow_dispatch el input no existe, así que un
+          # humano decidió salir: el gate no aplica.
+          if [ "${{ inputs.automatico }}" != "true" ]; then
             echo "seguir=true" >> "$GITHUB_OUTPUT"
             echo "Disparo manual: el gate de migraciones no aplica." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -99,7 +115,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      # Ver la nota en dev-ci.yml: sin password de DB, sólo el PAT.
+      # Ver la nota en stg-ci.yml: sin password de DB, sólo el PAT.
       - name: Aplicar migraciones a prod
         run: node scripts/db-push.mjs
         env:
@@ -111,6 +127,8 @@ jobs:
     needs: db-migration-prod
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      prod_antes: ${{ steps.merge.outputs.prod_antes }}
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
@@ -122,15 +140,55 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
       - name: Merge stg → prod
+        id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout prod
           git pull origin prod
-          TITLE="${{ github.event.pull_request.title }}"
-          MESSAGE="chore: promote stg → prod${TITLE:+ ($TITLE)}"
-          git merge origin/stg --no-ff -m "$MESSAGE"
+          # Se guarda ANTES del merge: es el extremo viejo del rango que se está
+          # promoviendo. Después del push, prod == stg y el rango ya no se puede
+          # reconstruir desde el estado del repo.
+          echo "prod_antes=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git merge origin/stg --no-ff -m "chore: promote stg → prod (${GITHUB_SHA::7})"
           git push origin prod
+
+      - name: Etiquetar issues promovidos como en-prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROD_ANTES: ${{ steps.merge.outputs.prod_antes }}
+        run: |
+          # No fail-fast: un issue que no se puede etiquetar (label borrado, PR
+          # de otro repo, o un número que resultó ser un issue y no un PR) no
+          # debe tumbar un release que ya se aplicó. Mejor una etiqueta que
+          # falta que un merge revertido.
+          #
+          # El patrón de subject varía según cómo se mergeó cada PR a stg (squash
+          # deja "... (#NN)"; merge commit deja "Merge pull request #NN from ...");
+          # se extrae cualquier "#NN" del subject y se prueba como número de PR.
+          # `gh pr view` sobre un número que resulta ser un issue falla solo y
+          # se ignora — heurística tolerante a falsos positivos, no exacta.
+          VERSION="v$(node -p "require('./package.json').version")"
+          PRS=$(git log "${PROD_ANTES}..HEAD" --format=%s \
+            | grep -oE '#[0-9]+' | grep -oE '[0-9]+' | sort -un)
+
+          if [ -z "$PRS" ]; then
+            echo "Sin referencias a PR/issue en el rango promovido."
+            exit 0
+          fi
+
+          for PR in $PRS; do
+            ISSUES=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+              --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[].number' 2>/dev/null || true)
+            for ISSUE in $ISSUES; do
+              gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label en-prod \
+                || echo "::warning::no se pudo etiquetar #$ISSUE (PR #$PR) — label en-prod inexistente o issue en otro repo"
+              gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+                --body "Promovido a producción en \`afin-webapp $VERSION\` (release: stg → prod, $(date -u +%Y-%m-%d))." \
+                || true
+            done
+          done
 
   promote-prod:
     name: Promote stg deployment → afinsrl.com.ar
