@@ -455,6 +455,10 @@ jobs:
             echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
             exit 1
           fi
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió un id de deployment: $RESULT"
+            exit 1
+          fi
           # `vercel deploy --json` devuelve .url CON esquema, a diferencia del API
           # /v13 que lo devuelve pelado. Anteponer https:// a ciegas daba
           # "https://https://host", que el browser resuelve como https://https/
@@ -576,6 +580,8 @@ jobs:
       contents: write
       issues: write
     uses: ./.github/workflows/release-prod.yml
+    with:
+      automatico: true
     secrets: inherit
 
   release-please:
