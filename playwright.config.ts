@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
+  // tests/local corre contra el stack local (playwright.local.config.ts), no contra el deploy.
+  testIgnore: 'local/**',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   reporter: [['html', { open: 'never' }], ['list']],
