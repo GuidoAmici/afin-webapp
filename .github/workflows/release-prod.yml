@@ -32,7 +32,10 @@ on:
         description: "Si es true, aplica el gate de migraciones."
         type: boolean
         required: false
-        default: false
+        # true = fail-closed: un llamador que omita `with:` NO se salta el gate.
+        # Un workflow_dispatch no declara inputs, así que un disparo manual
+        # (inputs.automatico vacío) sigue siendo la vía humana, sin gate.
+        default: true
 
 permissions:
   contents: write
@@ -46,8 +49,11 @@ jobs:
   gate:
     name: ¿Sale solo o espera a un humano?
     runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 10
     outputs:
       seguir: ${{ steps.decidir.outputs.seguir || steps.vacio.outputs.seguir }}
+      # El SHA de stg que el gate midió: `release` despliega EXACTAMENTE ese commit.
+      sha: ${{ steps.contar.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,24 +63,29 @@ jobs:
         env:
           AUTOMATICO: ${{ inputs.automatico }}
         run: |
+          # Fail-closed a propósito: si el fetch o el diff fallan, el paso corta,
+          # `sha` / MIGRACIONES_PENDIENTES nunca se escriben y el gate frena. Un
+          # gate que perdió la capacidad de mirar tiene que frenar, no dejar pasar.
+          set -euo pipefail
+          git fetch origin prod stg --quiet
+          git rev-parse --verify origin/prod >/dev/null
+          git rev-parse --verify origin/stg >/dev/null
+
+          # Se fija el SHA de stg ahora: `release` usa este mismo commit, así un
+          # push a stg con migraciones entre el gate y el release no se cuela.
+          SHA=$(git rev-parse origin/stg)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
           # En un workflow_dispatch el input no existe, así que un humano decidió
           # salir: el gate no aplica y no hace falta mirar el diff.
           if [ "$AUTOMATICO" != "true" ]; then
             exit 0
           fi
 
-          # Fail-closed a propósito: si el fetch o el diff fallan, el paso corta,
-          # MIGRACIONES_PENDIENTES nunca se escribe y el gate frena. Un gate que
-          # perdió la capacidad de mirar tiene que frenar, no dejar pasar.
-          set -euo pipefail
-          git fetch origin prod stg --quiet
-          git rev-parse --verify origin/prod >/dev/null
-          git rev-parse --verify origin/stg >/dev/null
-
-          COMMITS=$(git rev-list --count origin/prod..origin/stg)
+          COMMITS=$(git rev-list --count "origin/prod..$SHA")
           echo "commits=$COMMITS" >> "$GITHUB_OUTPUT"
 
-          MIGRACIONES=$(git diff --name-only origin/prod..origin/stg -- supabase/migrations)
+          MIGRACIONES=$(git diff --name-only "origin/prod..$SHA" -- supabase/migrations)
           if [ -z "$MIGRACIONES" ]; then
             echo "migraciones=0" >> "$GITHUB_OUTPUT"
           else
@@ -105,12 +116,14 @@ jobs:
           AUTOMATICO: ${{ inputs.automatico }}
           MIGRACIONES_PENDIENTES: ${{ steps.contar.outputs.migraciones }}
         run: |
+          set -o pipefail
           node scripts/release-gate.mjs | tee -a "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Checks + migraciones prod + merge stg → prod
     needs: gate
     if: needs.gate.outputs.seguir == 'true'
+    timeout-minutes: 30
     runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
     # Donde viven los secretos de la DB de prod y donde irían las reglas de aprobación.
     environment: prod
@@ -124,7 +137,8 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: stg
+          # El SHA que midió el gate, no la punta actual de stg.
+          ref: ${{ needs.gate.outputs.sha }}
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -145,6 +159,8 @@ jobs:
           SUPABASE_PROJECT_REF: myzngskhjnrmnonrksmj
       - name: Merge stg → prod
         id: merge
+        env:
+          STG_SHA: ${{ needs.gate.outputs.sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -154,7 +170,8 @@ jobs:
           # reconstruir desde el estado del repo.
           echo "prod_antes=$(git rev-parse origin/prod)" >> "$GITHUB_OUTPUT"
           git checkout prod
-          git merge origin/stg --no-ff -m "release: stg → prod (${GITHUB_SHA::7})"
+          # Se mergea el SHA que midió el gate, no origin/stg (que pudo avanzar).
+          git merge "$STG_SHA" --no-ff -m "release: stg → prod (${STG_SHA::7})"
           git push origin prod
 
       - name: Etiquetar issues promovidos como en-prod
@@ -198,25 +215,28 @@ jobs:
     name: Deploy prod → Vercel
     needs: release
     runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
-    env:
-      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
+    timeout-minutes: 20
     steps:
-      - name: Vercel sin configurar → skip
-        if: env.HAS_VERCEL != 'true'
-        run: echo "VERCEL_TOKEN no esta configurado - el deploy se activa con el issue 12"
+      # Sin token no hay deploy: el release ya mergeó a prod, y un job verde sin
+      # desplegar dejaría a producción atrasada sin que nadie lo vea.
+      - name: Verificar que Vercel esté configurado
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Falta el secreto VERCEL_TOKEN: stg ya se mergeó a prod pero NO se desplegó. Configurarlo y re-disparar el deploy."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.HAS_VERCEL == 'true'
         with:
           ref: prod
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: env.HAS_VERCEL == 'true'
         with:
           node-version: 24
           # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
           # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
           package-manager-cache: false
       - name: Deploy production
-        if: env.HAS_VERCEL == 'true'
         run: |
           npm install -g vercel@latest
           vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -226,45 +246,52 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # Cierra el círculo: recién desplegado, se comprueba que las URLs impresas
-      # en papel resuelvan de verdad. Es el único paso que mira producción con
-      # los ojos de quien escanea un QR. Va como paso y no como workflow
-      # anidado: es un `node script` y no justifica un tercer nivel.
-      - name: Smoke — rutas impresas
-        if: env.HAS_VERCEL == 'true'
-        run: |
-          echo "Esperando a que propague el deploy..."
-          sleep 30
-          node scripts/smoke-rutas-impresas.mjs
-
-      # El bundle de Production nunca debe apuntar a la base de stg. Si el build se
-      # hizo con las variables del entorno equivocado, la web le hablaría a stg.
-      - name: Verificar que el bundle no apunte a la base de stg
-        if: env.HAS_VERCEL == 'true'
+      # El bundle de Production nunca debe apuntar a la base de stg, y sí a la de
+      # prod. Si el build se hizo con las variables del entorno equivocado, la web
+      # le hablaría a stg. Corre siempre que el deploy haya corrido (es el último paso).
+      - name: Verificar que el bundle apunte a la base de prod y no a la de stg
         run: |
           STG_REF=wbsvxdquzvsawmjoiwat
+          PROD_REF=myzngskhjnrmnonrksmj
           FALLAS=0
+          echo "Esperando a que propague el deploy..."
+          sleep 30
           for URL in https://afinsrl.com.ar/ https://www.afinsrl.com.ar/; do
             echo "Revisando $URL"
             HTML=$(curl -fsSL --retry 5 --retry-delay 10 "$URL") \
               || { echo "::error::No se pudo bajar $URL"; FALLAS=1; continue; }
-            CHUNKS=$(echo "$HTML" | grep -oE '/_next/static/chunks/[^"'"'"' )\\]+\.js' | sort -u)
+            CHUNKS=$(echo "$HTML" | grep -oE '/_next/static/chunks/[^"'"'"' )\\]+\.js' | sort -u || true)
             if [ -z "$CHUNKS" ]; then
               echo "::error::$URL no referencia ningún chunk de /_next/static/chunks/: no se puede verificar el bundle"
               FALLAS=1
               continue
             fi
-            echo "$HTML" | grep -q "$STG_REF" \
-              && { echo "::error::$URL (HTML) referencia la base de stg $STG_REF"; FALLAS=1; }
+            VIO_PROD=0
+            if echo "$HTML" | grep -q "$STG_REF"; then
+              echo "::error::$URL (HTML) referencia la base de stg $STG_REF"; FALLAS=1
+            fi
+            if echo "$HTML" | grep -q "$PROD_REF"; then VIO_PROD=1; fi
             for CHUNK in $CHUNKS; do
-              if curl -fsSL --retry 3 "${URL%/}$CHUNK" | grep -q "$STG_REF"; then
+              # Se baja a una variable: con `curl | grep` una descarga fallida
+              # alimentaría a grep con nada y el chunk pasaría como limpio.
+              if ! CONTENIDO=$(curl -fsSL --retry 3 "${URL%/}$CHUNK"); then
+                echo "::error::No se pudo bajar ${URL%/}$CHUNK: no se puede verificar"
+                FALLAS=1
+                continue
+              fi
+              if echo "$CONTENIDO" | grep -q "$STG_REF"; then
                 echo "::error::${URL%/}$CHUNK referencia la base de stg $STG_REF — Production se construyó con las variables de stg"
                 FALLAS=1
               fi
+              if echo "$CONTENIDO" | grep -q "$PROD_REF"; then VIO_PROD=1; fi
             done
+            if [ "$VIO_PROD" -ne 1 ]; then
+              echo "::error::$URL: no se pudo confirmar que el build apunte a prod ($PROD_REF no aparece en el HTML ni en los chunks)"
+              FALLAS=1
+            fi
           done
           if [ "$FALLAS" -ne 0 ]; then
             echo "::error::Production no es confiable: revisar las variables de entorno de Production en Vercel y re-desplegar."
             exit 1
           fi
-          echo "OK: ningún chunk de afinsrl.com.ar ni www.afinsrl.com.ar referencia $STG_REF"
+          echo "OK: afinsrl.com.ar y www apuntan a $PROD_REF y ninguno referencia $STG_REF"
