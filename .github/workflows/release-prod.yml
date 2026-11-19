@@ -1,3 +1,7 @@
+# D8 (issue #11) + release-please (ADR-0006, ADR-0007): release stg → prod.
+# Database-first (ADR-0001): las migraciones se aplican a la DB de prod ANTES
+# del merge de código — si fallan, prod no se toca.
+#
 # Se dispara de dos formas:
 #
 #   1. Automático: stg-ci.yml lo invoca (workflow_call) tras terminar verde en
@@ -8,14 +12,17 @@
 #   2. A mano (workflow_dispatch), que ignora ese gate: es la vía para los
 #      releases con migraciones, y la que se usa cuando se quiere mirar antes.
 #
-# Antes esto se disparaba por el evento `pull_request: closed` en stg,
-# filtrando por head_ref del Release PR — acoplado a que GitHub dispare ese
-# evento y a que el nombre matchee. `workflow_call` desde el mismo run que ya
-# deployó a stg es más confiable (ver docs/adr).
-#
 # El gate vive en el job `gate`. Si frena, deja escrito en el summary qué
 # migraciones lo frenaron y cómo disparar el release a mano.
-name: Release — promote stg → prod
+#
+# `closed` en un issue quiere decir "mergeado a stg", no "en producción" — stg
+# es la rama default (autocierra por keyword) y eso incluye a la IA, que lee
+# el tracker antes que el código. La distancia entre las dos cosas la marca el
+# label `en-prod`: el paso final del job `release` recorre los PRs recién
+# mergeados a `prod` en este run, sigue el `closingIssuesReferences` de cada
+# uno (lo que GitHub ya calculó a partir de "Closes #N" en el PR) y etiqueta +
+# comenta cada issue con la versión que lo llevó a producción.
+name: Release → prod
 
 on:
   workflow_dispatch:
@@ -24,44 +31,40 @@ on:
       automatico:
         description: "Si es true, aplica el gate de migraciones."
         type: boolean
-        default: true
+        required: false
+        default: false
 
 permissions:
   contents: write
   issues: write
 
 concurrency:
-  group: deploy-production
+  group: release-prod
   cancel-in-progress: false
 
 jobs:
-  # Un cambio de copy y una migración de esquema no son el mismo riesgo: el
-  # código se revierte con un merge, una migración aplicada a la DB de producción
-  # no. El gate deja salir solo al primero y manda el segundo a un humano.
   gate:
     name: ¿Sale solo o espera a un humano?
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
     outputs:
-      seguir: ${{ steps.decidir.outputs.seguir }}
+      seguir: ${{ steps.decidir.outputs.seguir || steps.vacio.outputs.seguir }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Decidir
-        id: decidir
+      - name: Contar migraciones de prod..stg
+        id: contar
+        env:
+          AUTOMATICO: ${{ inputs.automatico }}
         run: |
-          # En una llamada desde stg-ci.yml, `automatico` llega true y el gate
-          # aplica. En un workflow_dispatch el input no existe, así que un
-          # humano decidió salir: el gate no aplica.
-          if [ "${{ inputs.automatico }}" != "true" ]; then
-            echo "seguir=true" >> "$GITHUB_OUTPUT"
-            echo "Disparo manual: el gate de migraciones no aplica." >> "$GITHUB_STEP_SUMMARY"
+          # En un workflow_dispatch el input no existe, así que un humano decidió
+          # salir: el gate no aplica y no hace falta mirar el diff.
+          if [ "$AUTOMATICO" != "true" ]; then
             exit 0
           fi
 
-          # Fail-closed a propósito: si el fetch o el diff fallan, el paso corta
-          # y `seguir` nunca se escribe, así que el release NO sale. Un gate que
+          # Fail-closed a propósito: si el fetch o el diff fallan, el paso corta,
+          # MIGRACIONES_PENDIENTES nunca se escribe y el gate frena. Un gate que
           # perdió la capacidad de mirar tiene que frenar, no dejar pasar.
           set -euo pipefail
           git fetch origin prod stg --quiet
@@ -69,88 +72,79 @@ jobs:
           git rev-parse --verify origin/stg >/dev/null
 
           COMMITS=$(git rev-list --count origin/prod..origin/stg)
-          if [ "$COMMITS" -eq 0 ]; then
-            echo "seguir=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Nada que releasear"
-              echo "\`prod\` ya tiene todo lo de \`stg\`."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
+          echo "commits=$COMMITS" >> "$GITHUB_OUTPUT"
 
           MIGRACIONES=$(git diff --name-only origin/prod..origin/stg -- supabase/migrations)
-
           if [ -z "$MIGRACIONES" ]; then
-            echo "seguir=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Sale solo"
-              echo "$COMMITS commit(s) y ninguna migración en \`prod..stg\`. Release automático."
-            } >> "$GITHUB_STEP_SUMMARY"
+            echo "migraciones=0" >> "$GITHUB_OUTPUT"
           else
-            echo "seguir=false" >> "$GITHUB_OUTPUT"
+            echo "migraciones=$(echo "$MIGRACIONES" | wc -l)" >> "$GITHUB_OUTPUT"
             {
-              echo "## Espera a un humano"
-              echo "El diff \`prod..stg\` trae migraciones, que no se revierten con un merge:"
+              echo "## Migraciones en \`prod..stg\`"
               echo '```'
               echo "$MIGRACIONES"
               echo '```'
-              echo "Para salir igual:"
-              echo '```bash'
-              echo "gh workflow run release-prod.yml --repo ${GITHUB_REPOSITORY}"
-              echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  db-migration-prod:
-    name: DB migration prod
+      - name: Nada que releasear
+        id: vacio
+        if: inputs.automatico == true && steps.contar.outputs.commits == '0'
+        run: |
+          echo "seguir=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Nada que releasear"
+            echo "\`prod\` ya tiene todo lo de \`stg\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # La decisión vive en scripts/release-gate.mjs (con tests), no inline.
+      - name: Decidir
+        id: decidir
+        if: steps.vacio.outcome == 'skipped'
+        env:
+          AUTOMATICO: ${{ inputs.automatico }}
+          MIGRACIONES_PENDIENTES: ${{ steps.contar.outputs.migraciones }}
+        run: |
+          node scripts/release-gate.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Checks + migraciones prod + merge stg → prod
     needs: gate
     if: needs.gate.outputs.seguir == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: prod
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: stg
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      # Ver la nota en stg-ci.yml: sin password de DB, sólo el PAT.
-      - name: Aplicar migraciones a prod
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+          # En el runner propio, sin caché: subiría todo ~/.npm del usuario (se colgó 16 min).
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Migraciones → AFIN DB prod
         run: node scripts/db-push.mjs
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: myzngskhjnrmnonrksmj
-
-  merge-to-prod:
-    name: Merge stg → prod
-    needs: db-migration-prod
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      prod_antes: ${{ steps.merge.outputs.prod_antes }}
-    steps:
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: app-token
-        with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
       - name: Merge stg → prod
         id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout prod
-          git pull origin prod
+          git fetch origin prod
           # Se guarda ANTES del merge: es el extremo viejo del rango que se está
           # promoviendo. Después del push, prod == stg y el rango ya no se puede
           # reconstruir desde el estado del repo.
-          echo "prod_antes=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          git merge origin/stg --no-ff -m "chore: promote stg → prod (${GITHUB_SHA::7})"
+          echo "prod_antes=$(git rev-parse origin/prod)" >> "$GITHUB_OUTPUT"
+          git checkout prod
+          git merge origin/stg --no-ff -m "release: stg → prod (${GITHUB_SHA::7})"
           git push origin prod
 
       - name: Etiquetar issues promovidos como en-prod
@@ -190,27 +184,77 @@ jobs:
             done
           done
 
-  promote-prod:
-    name: Promote stg deployment → afinsrl.com.ar
-    needs: merge-to-prod
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  deploy-prod:
+    name: Deploy prod → Vercel
+    needs: release
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    env:
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
-      - run: npm install -g vercel@latest
-      - name: Obtener deployment ID de stg.afinsrl.com.ar
-        id: stg-deploy
+      - name: Vercel sin configurar → skip
+        if: env.HAS_VERCEL != 'true'
+        run: echo "VERCEL_TOKEN no esta configurado - el deploy se activa con el issue 12"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_VERCEL == 'true'
+        with:
+          ref: prod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: env.HAS_VERCEL == 'true'
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+      - name: Deploy production
+        if: env.HAS_VERCEL == 'true'
         run: |
-          DEPLOY_ID=$(curl -sf "https://api.vercel.com/v3/now/aliases/stg.afinsrl.com.ar" \
-            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" | jq -r '.deploymentId')
-          if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
-            echo "::error::No se pudo obtener el deployment ID de stg.afinsrl.com.ar"
-            exit 1
-          fi
-          echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
-      - name: Promover a afinsrl.com.ar
-        run: |
-          vercel alias set ${{ steps.stg-deploy.outputs.id }} afinsrl.com.ar \
-            --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npm install -g vercel@latest
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Cierra el círculo: recién desplegado, se comprueba que las URLs impresas
+      # en papel resuelvan de verdad. Es el único paso que mira producción con
+      # los ojos de quien escanea un QR. Va como paso y no como workflow
+      # anidado: es un `node script` y no justifica un tercer nivel.
+      - name: Smoke — rutas impresas
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          echo "Esperando a que propague el deploy..."
+          sleep 30
+          node scripts/smoke-rutas-impresas.mjs
+
+      # El bundle de Production nunca debe apuntar a la base de stg. Si el build se
+      # hizo con las variables del entorno equivocado, la web le hablaría a stg.
+      - name: Verificar que el bundle no apunte a la base de stg
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          STG_REF=wbsvxdquzvsawmjoiwat
+          FALLAS=0
+          for URL in https://afinsrl.com.ar/ https://www.afinsrl.com.ar/; do
+            echo "Revisando $URL"
+            HTML=$(curl -fsSL --retry 5 --retry-delay 10 "$URL") \
+              || { echo "::error::No se pudo bajar $URL"; FALLAS=1; continue; }
+            CHUNKS=$(echo "$HTML" | grep -oE '/_next/static/chunks/[^"'"'"' )\\]+\.js' | sort -u)
+            if [ -z "$CHUNKS" ]; then
+              echo "::error::$URL no referencia ningún chunk de /_next/static/chunks/: no se puede verificar el bundle"
+              FALLAS=1
+              continue
+            fi
+            echo "$HTML" | grep -q "$STG_REF" \
+              && { echo "::error::$URL (HTML) referencia la base de stg $STG_REF"; FALLAS=1; }
+            for CHUNK in $CHUNKS; do
+              if curl -fsSL --retry 3 "${URL%/}$CHUNK" | grep -q "$STG_REF"; then
+                echo "::error::${URL%/}$CHUNK referencia la base de stg $STG_REF — Production se construyó con las variables de stg"
+                FALLAS=1
+              fi
+            done
+          done
+          if [ "$FALLAS" -ne 0 ]; then
+            echo "::error::Production no es confiable: revisar las variables de entorno de Production en Vercel y re-desplegar."
+            exit 1
+          fi
+          echo "OK: ningún chunk de afinsrl.com.ar ni www.afinsrl.com.ar referencia $STG_REF"
