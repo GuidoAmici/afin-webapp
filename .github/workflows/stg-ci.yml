@@ -134,6 +134,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:scripts
       # `setup-node` cachea `~/.npm` (las descargas), no `.next/cache` (el
       # trabajo del compilador). Sin esto Next recompila todo en cada run y lo
       # avisa en el log. La key incluye el lock —un bump de Next invalida el
