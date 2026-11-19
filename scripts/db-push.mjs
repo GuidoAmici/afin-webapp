@@ -7,59 +7,83 @@
 // aplica junto con su registro en una sola llamada (transacción única): si
 // falla, no queda ni el cambio ni el registro.
 //
+// Frena (exit 1) si el historial remoto tiene versiones sin archivo local que
+// no estén declaradas en MIGRACIONES_EXTERNAS: una DB que avanzó por fuera del
+// repo no se pisa en silencio. No aplica nada hasta que se resuelva.
+//
 // Uso:
-//   SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... node scripts/db-push.mjs
+//   SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... \
+//   [MIGRACIONES_EXTERNAS=ver1,ver2] node scripts/db-push.mjs
 
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ref = process.env.SUPABASE_PROJECT_REF;
-const token = process.env.SUPABASE_ACCESS_TOKEN;
-if (!ref || !token) {
-  console.error('Faltan SUPABASE_PROJECT_REF y/o SUPABASE_ACCESS_TOKEN.');
-  process.exit(1);
+// La identidad de una migración es su version: el timestamp antes del primer
+// `_` (es lo que el historial remoto guarda en `version`).
+const versionDe = (x) => String(x).split('_')[0];
+
+// Decide qué aplicar y qué frena. Pura: sin red ni disco.
+//  - locales: nombres de archivo (`<version>_<nombre>.sql` o `1_a` en tests)
+//  - remotas: versiones ya registradas en el historial remoto
+//  - externas: versiones remotas sin archivo local que se aceptan a propósito
+// Devuelve `aplicar` (locales que faltan en remoto, en orden, tal como vinieron)
+// y `desconocidas` (remotas sin archivo local y no declaradas como externas).
+export function planificar({ locales, remotas, externas }) {
+  const vLocales = new Set(locales.map(versionDe));
+  const vRemotas = new Set(remotas.map(versionDe));
+  const vExternas = new Set(externas.map(versionDe));
+  const aplicar = locales
+    .filter((f) => !vRemotas.has(versionDe(f)))
+    .sort((a, b) => (versionDe(a) < versionDe(b) ? -1 : versionDe(a) > versionDe(b) ? 1 : 0));
+  const desconocidas = remotas.filter((r) => !vLocales.has(versionDe(r)) && !vExternas.has(versionDe(r)));
+  return { aplicar, desconocidas };
 }
 
-const API = `https://api.supabase.com/v1/projects/${ref}/database/query`;
+async function main() {
+  const ref = process.env.SUPABASE_PROJECT_REF;
+  const token = process.env.SUPABASE_ACCESS_TOKEN;
+  if (!ref || !token) {
+    console.error('Faltan SUPABASE_PROJECT_REF y/o SUPABASE_ACCESS_TOKEN.');
+    process.exit(1);
+  }
 
-async function query(sql) {
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: sql }),
-  });
-  const body = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${body.slice(0, 800)}`);
-  return body ? JSON.parse(body) : [];
-}
+  const API = `https://api.supabase.com/v1/projects/${ref}/database/query`;
 
-const MIG_DIR = 'supabase/migrations';
-const files = (await readdir(MIG_DIR)).filter((f) => f.endsWith('.sql')).sort();
+  async function query(sql) {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: sql }),
+    });
+    const body = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${body.slice(0, 800)}`);
+    return body ? JSON.parse(body) : [];
+  }
 
-// En un proyecto nunca migrado (p. ej. prod antes del primer release) el
-// historial no existe todavía.
-await query(`
-  CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-  CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-    version text PRIMARY KEY,
-    statements text[],
-    name text
+  const MIG_DIR = 'supabase/migrations';
+  const files = (await readdir(MIG_DIR)).filter((f) => f.endsWith('.sql')).sort();
+
+  // En un proyecto nunca migrado (p. ej. prod antes del primer release) el
+  // historial no existe todavía.
+  await query(`
+    CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+    CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+      version text PRIMARY KEY,
+      statements text[],
+      name text
+    );
+  `);
+
+  // version → name de lo ya aplicado. Se guarda el NOMBRE, no solo el timestamp:
+  // ver el guard de colisión más abajo.
+  const remote = new Map(
+    (await query('SELECT version, name FROM supabase_migrations.schema_migrations')).map((r) => [
+      r.version,
+      r.name,
+    ]),
   );
-`);
 
-// version → name de lo ya aplicado. Se guarda el NOMBRE, no solo el timestamp:
-// ver el guard de colisión más abajo.
-const remote = new Map(
-  (await query('SELECT version, name FROM supabase_migrations.schema_migrations')).map((r) => [
-    r.version,
-    r.name,
-  ]),
-);
-
-let applied = 0;
-for (const f of files) {
-  const version = f.split('_')[0];
-  const name = f.slice(version.length + 1, -4);
   // Guard de colisión de timestamp. El historial se indexa por VERSION
   // (el timestamp), no por nombre de archivo: dos ramas que eligen el mismo
   // `HHMMSS` del mismo día producen la misma version con archivos distintos, y
@@ -73,23 +97,51 @@ for (const f of files) {
   // cambia el nombre de una migración ya aplicada". O sea: EL NOMBRE DE UNA
   // MIGRACIÓN ES INMUTABLE UNA VEZ APLICADA. Si alguna vez hay que renombrar
   // una de verdad, hay que actualizar también su fila del historial.
-  if (remote.has(version)) {
-    if (remote.get(version) !== name) {
+  // Se chequea antes de aplicar nada, para no dejar la DB a medias.
+  const nombreDe = (f) => f.slice(versionDe(f).length + 1, -4);
+  for (const f of files) {
+    const version = versionDe(f);
+    if (remote.has(version) && remote.get(version) !== nombreDe(f)) {
       throw new Error(
         `Colisión de timestamp en ${f}: la version ${version} ya está registrada en ${ref} ` +
           `con el nombre "${remote.get(version)}". Renombrá tu migración con otro timestamp ` +
           `(si en cambio renombraste un archivo ya aplicado, actualizá el historial a mano).`,
       );
     }
-    continue;
   }
-  const sql = await readFile(path.join(MIG_DIR, f), 'utf8');
-  const esc = sql.replaceAll("'", "''");
-  console.log(`Aplicando ${f}…`);
-  await query(
-    `${sql}\nINSERT INTO supabase_migrations.schema_migrations (version, name, statements) VALUES ('${version}', '${name}', ARRAY['${esc}']);`,
-  );
-  applied += 1;
+
+  // Versiones remotas sin archivo local: sólo pasan si están declaradas.
+  const externas = (process.env.MIGRACIONES_EXTERNAS ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const { aplicar, desconocidas } = planificar({ locales: files, remotas: [...remote.keys()], externas });
+  if (desconocidas.length) {
+    console.error(
+      `✗ ${ref} tiene ${desconocidas.length} migración(es) sin archivo local y no declaradas: ` +
+        `${desconocidas.join(', ')}.\n` +
+        `  No se aplicó nada. Traé el archivo al repo o, si es a propósito, agregá la version a ` +
+        `MIGRACIONES_EXTERNAS (variable del repo, lista separada por comas).`,
+    );
+    process.exit(1);
+  }
+
+  let applied = 0;
+  for (const f of aplicar) {
+    const version = versionDe(f);
+    const name = nombreDe(f);
+    const sql = await readFile(path.join(MIG_DIR, f), 'utf8');
+    const esc = sql.replaceAll("'", "''");
+    console.log(`Aplicando ${f}…`);
+    await query(
+      `${sql}\nINSERT INTO supabase_migrations.schema_migrations (version, name, statements) VALUES ('${version}', '${name}', ARRAY['${esc}']);`,
+    );
+    applied += 1;
+  }
+
+  console.log(applied ? `✓ ${applied} migración(es) aplicada(s) a ${ref}.` : `✓ ${ref} al día: sin migraciones pendientes.`);
 }
 
-console.log(applied ? `✓ ${applied} migración(es) aplicada(s) a ${ref}.` : `✓ ${ref} al día: sin migraciones pendientes.`);
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  await main();
+}

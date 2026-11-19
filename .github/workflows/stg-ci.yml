@@ -343,6 +343,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: wbsvxdquzvsawmjoiwat
+          MIGRACIONES_EXTERNAS: ${{ vars.MIGRACIONES_EXTERNAS }}
 
   deploy-preview:
     name: Deploy preview (PR) → Vercel
