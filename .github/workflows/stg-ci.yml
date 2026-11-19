@@ -426,6 +426,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       url: ${{ steps.deploy.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.id }}
     env:
       HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
@@ -462,9 +463,29 @@ jobs:
           HOST="${HOST#https://}"
           HOST="${HOST#http://}"
           echo "url=https://${HOST}" >> "$GITHUB_OUTPUT"
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # AFIN: stg.afinsrl.com.ar se alía explícitamente al deployment recién
+      # creado (no hay integración por rama que lo haga). Sólo en push: este job
+      # no corre en PR, así que un preview sin mergear nunca pisa el dominio.
+      - name: Desvincular stg.afinsrl.com.ar de git branch
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          curl -sf -X PATCH \
+            "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"gitBranch": null}'
+      - name: Asignar alias stg al deployment
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          curl -sf -X POST \
+            "https://api.vercel.com/v2/deployments/${{ steps.deploy.outputs.id }}/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"alias": "stg.afinsrl.com.ar"}'
 
   e2e:
     name: Playwright — gate en PR / detección en push
