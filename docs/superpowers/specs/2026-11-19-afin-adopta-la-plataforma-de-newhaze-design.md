@@ -80,7 +80,7 @@ construye por su cuenta: así no quedan dos versiones de lo mismo.
 | Flags | `src/flags.ts` (`flags/next`, valor fijo por entorno: el de `produccion` en Production y encendido en el resto, override por sesión desde la Toolbar de Vercel) | Reemplaza a `NEXT_PUBLIC_FF_*`. Se evalúan en el server, así que ya no viajan inlineados al browser |
 | Permisos | ADR-0030 y migraciones `permisos_m1`/`m2`/`m3` | Recortado a lo que AFIN usa. Detalle en el diseño de ARCA |
 | `profiles` self-only | ADR-0015 | Hoy `empleado` lee todos los perfiles. Pasa a `usuarios:ver` |
-| Config de Auth | ADR-0020: `config.toml` con `env()` por entorno y templates de mail como archivos | Resuelve lo que la revisión no pudo medir (`site_url`, redirect URLs, largo de contraseña). En stg se fija `password_min_length = 3` por las cuentas `@test.com` |
+| Config de Auth | ADR-0020: `config.toml` con `env()` por entorno y templates de mail como archivos | Resuelve lo que la revisión no pudo medir (`site_url`, redirect URLs, largo de contraseña). Las cuentas `@test.com` no dependen del largo mínimo: el login no lo valida, solo el alta y el cambio de contraseña |
 | Convenciones | `AGENTS.md`: formato del PR, gates para mergear a `stg`, «Para probar en stg» | Se copian a `AGENTS.md` de AFIN |
 | Settings del repo | `delete_branch_on_merge: true`, rama por defecto `stg` | AFIN hoy tiene `delete_branch_on_merge: false` |
 
