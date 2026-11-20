@@ -17,12 +17,22 @@ case "$env_name" in
   *) echo "uso: $0 <stg|prod>" >&2; exit 2 ;;
 esac
 
-cd "$(dirname "$0")/.."
+# Ruta absoluta antes del cd: el re-exec dentro de doppler no depende del cwd.
+script="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$script")/.."
 
 # Corre dentro de `doppler run`, donde las variables ya están en el entorno.
 if [ "${AUTH_CONFIG_PUSH_INNER:-}" != "1" ]; then
   exec env AUTH_CONFIG_PUSH_INNER=1 AUTH_CONFIG_PUSH_REF="$ref" \
-    doppler run -p afin-webapp -c "$env_name" -- "$0" "$env_name"
+    doppler run -p afin-webapp -c "$env_name" -- "$script" "$env_name"
+fi
+
+# Adentro, el ref sale otra vez del argumento (arriba), no del entorno: un
+# AUTH_CONFIG_PUSH_REF heredado o seteado a mano con INNER=1 no puede mandar la
+# config de un entorno al proyecto del otro.
+if [ "${AUTH_CONFIG_PUSH_REF:-}" != "$ref" ]; then
+  echo "AUTH_CONFIG_PUSH_REF (${AUTH_CONFIG_PUSH_REF:-vacío}) no es el proyecto de $env_name ($ref): no se pushea" >&2
+  exit 1
 fi
 
 missing=0
@@ -52,6 +62,6 @@ if [ -z "${AFIN_SUPABASE_ACCESS_TOKEN:-}" ]; then
 fi
 export SUPABASE_ACCESS_TOKEN="$AFIN_SUPABASE_ACCESS_TOKEN"
 
-echo "Pusheando la config de auth a $env_name ($AUTH_CONFIG_PUSH_REF); el CLI muestra el diff y pide confirmación."
+echo "Pusheando la config de auth a $env_name ($ref); el CLI muestra el diff y pide confirmación."
 # Sin --yes a propósito: el CLI muestra su propio diff y la persona confirma a mano.
-exec supabase config push --project-ref "$AUTH_CONFIG_PUSH_REF"
+exec supabase config push --project-ref "$ref"
