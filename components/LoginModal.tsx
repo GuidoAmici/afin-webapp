@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, SubmitBtn } from './ui/form'
+import { useFlags } from './flags-provider'
 
 type Vista = 'login' | 'registro' | 'confirmacion'
 
@@ -14,7 +15,10 @@ interface Props {
 }
 
 export default function LoginModal({ onClose, onSuccess, vistaInicial = 'login' }: Props) {
-  const [vista, setVista] = useState<Vista>(vistaInicial)
+  const { registroClientes } = useFlags()
+  // Con el registro apagado no hay vista de registro: se cae al login.
+  const [vistaElegida, setVista] = useState<Vista>(vistaInicial)
+  const vista: Vista = !registroClientes && vistaElegida === 'registro' ? 'login' : vistaElegida
   const cardRef = useRef<HTMLDivElement>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
 
@@ -38,7 +42,7 @@ export default function LoginModal({ onClose, onSuccess, vistaInicial = 'login' 
         <button onClick={onClose} aria-label="Cerrar" className="modal-close-x">✕</button>
 
         {vista === 'login' && (
-          <LoginVista inputRef={firstInputRef} onSuccess={onSuccess} onRegistro={() => setVista('registro')} />
+          <LoginVista inputRef={firstInputRef} onSuccess={onSuccess} onRegistro={registroClientes ? () => setVista('registro') : undefined} />
         )}
         {vista === 'registro' && (
           <RegistroVista inputRef={firstInputRef} onConfirmacion={() => setVista('confirmacion')} onLogin={() => setVista('login')} />
@@ -56,7 +60,7 @@ export default function LoginModal({ onClose, onSuccess, vistaInicial = 'login' 
 function LoginVista({ inputRef, onSuccess, onRegistro }: {
   inputRef: React.RefObject<HTMLInputElement | null>
   onSuccess: () => void
-  onRegistro: () => void
+  onRegistro?: () => void
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -83,10 +87,12 @@ function LoginVista({ inputRef, onSuccess, onRegistro }: {
         {error && <ErrorMsg>{error}</ErrorMsg>}
         <SubmitBtn loading={loading}>Ingresar</SubmitBtn>
       </form>
-      <p style={footerStyle}>
-        ¿No tenés cuenta?{' '}
-        <button type="button" className="btn-text" onClick={onRegistro}>Registrate</button>
-      </p>
+      {onRegistro && (
+        <p style={footerStyle}>
+          ¿No tenés cuenta?{' '}
+          <button type="button" className="btn-text" onClick={onRegistro}>Registrate</button>
+        </p>
+      )}
     </>
   )
 }

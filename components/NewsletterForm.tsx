@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { subscribeToNewsletter } from '@/app/actions/newsletter'
+import { useFlags } from '@/components/flags-provider'
 
 export default function NewsletterForm() {
+  const { newsletter } = useFlags()
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
@@ -13,6 +15,8 @@ export default function NewsletterForm() {
     const result = await subscribeToNewsletter(email)
     setStatus(result.success ? 'success' : 'error')
   }
+
+  if (!newsletter) return null
 
   if (status === 'success') {
     return (

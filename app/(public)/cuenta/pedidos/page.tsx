@@ -5,7 +5,7 @@ import { useRouter, notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { flags } from '@/lib/flags'
+import { useFlags } from '@/components/flags-provider'
 import { statusMeta, statusTint } from '@/lib/order-status'
 import { paymentMeta, paymentMethodLabel } from '@/lib/payment-status'
 import { formatARS } from '@/lib/format'
@@ -41,6 +41,7 @@ function lineSubtotal(item: OrderItem): string | null {
 }
 
 export default function PedidosPage() {
+  const flags = useFlags()
   const [orders, setOrders] = useState<Order[] | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const router = useRouter()

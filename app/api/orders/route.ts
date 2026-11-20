@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { CartItem } from '@/lib/cart'
-import { flags } from '@/lib/flags'
+import { pedidosFlag } from '@/flags'
 
 /** Fila de `order_items` tal como se relee para poder restaurarla intacta. */
 type PreviousItem = {
@@ -42,7 +42,7 @@ async function notifyCallMeBot(message: string) {
 export async function POST(request: Request) {
   // La puerta real del flag: ocultar el carrito no alcanza, el endpoint tiene que
   // no existir cuando el canal de pedidos está apagado en este entorno.
-  if (!flags.pedidos) {
+  if (!(await pedidosFlag())) {
     return NextResponse.json({ error: 'no_disponible' }, { status: 404 })
   }
 

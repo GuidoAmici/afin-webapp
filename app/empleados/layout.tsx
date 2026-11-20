@@ -1,17 +1,20 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { flags } from '@/lib/flags'
+import { panelClientesFlag, panelProductosFlag } from '@/flags'
 
 // El nav declara qué flag habilita cada sección; sin flag, siempre visible.
 // Antes linkeaba a /productos y /clientes, que no existen (#18) — 404 desde el nav.
-const NAV_SECTIONS = [
-  { href: '/empleados/pedidos', label: 'Pedidos', enabled: true },
-  { href: '/empleados/productos', label: 'Productos', enabled: flags.panelProductos },
-  { href: '/empleados/clientes', label: 'Clientes', enabled: flags.panelClientes },
-]
-
 export default async function EmpleadosLayout({ children }: { children: React.ReactNode }) {
+  // `pedidos` no gatea /empleados a propósito (ADR-0005): la fábrica toma pedidos
+  // por WhatsApp y el personal necesita la cola igual.
+  const [panelProductos, panelClientes] = await Promise.all([panelProductosFlag(), panelClientesFlag()])
+  const NAV_SECTIONS = [
+    { href: '/empleados/pedidos', label: 'Pedidos', enabled: true },
+    { href: '/empleados/productos', label: 'Productos', enabled: panelProductos },
+    { href: '/empleados/clientes', label: 'Clientes', enabled: panelClientes },
+  ]
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

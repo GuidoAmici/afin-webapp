@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import Logo from '@/components/Logo'
 import NewsletterForm from '@/components/NewsletterForm'
+import { newsletterFlag } from '@/flags'
 
-export default function Footer() {
+export default async function Footer() {
+  const newsletter = await newsletterFlag()
   return (
     <footer className="site-footer">
       <div className="footer-inner">
+        {newsletter && (
         <div className="footer-newsletter">
           <div className="footer-newsletter-text">
             <p className="footer-newsletter-eyebrow">Novedades</p>
@@ -14,6 +17,7 @@ export default function Footer() {
           </div>
           <NewsletterForm />
         </div>
+        )}
 
         <div className="footer-grid">
           <div>

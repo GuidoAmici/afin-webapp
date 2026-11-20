@@ -9,7 +9,7 @@ import { formatCuit, formatARS } from '@/lib/format'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { FieldInput, ErrorMsg, ChoiceToggle } from './ui/form'
 import LoginModal from './LoginModal'
-import { flags } from '@/lib/flags'
+import { useFlags } from '@/components/flags-provider'
 
 type Vista = 'carrito' | 'perfil' | 'confirmado'
 type TipoFacturacion = 'personal' | 'empresa'
@@ -47,6 +47,7 @@ interface ProfileForm {
 interface Props { onClose: () => void }
 
 export default function CartModal({ onClose }: Props) {
+  const flags = useFlags()
   const { items, count, setQty, remove, clear } = useCart()
   const [vista, setVista] = useState<Vista>('carrito')
   const [loginOpen, setLoginOpen] = useState(false)

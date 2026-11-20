@@ -8,7 +8,7 @@ import { parseFlag } from '@/lib/flags'
  * sola (ADR-004) y hay que llamarlo **después** de verificar la sesión: la policy
  * de lectura exige `auth.uid() IS NOT NULL`.
  *
- * Los flags de release (env vars) están en `lib/flags.ts`. Un flag de release
+ * Los flags de release están en `flags.ts` (raíz, `flags/next`). Un flag de release
  * decide si la feature existe en este entorno; un ops flag decide si está
  * operando ahora. Para que algo funcione tienen que estar los dos en on.
  */

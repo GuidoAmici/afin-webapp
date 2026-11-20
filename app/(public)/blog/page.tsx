@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import NewsletterForm from '@/components/NewsletterForm'
+import { newsletterFlag } from '@/flags'
 
 export const metadata: Metadata = {
   title: 'Blog',
   description: 'Novedades e información del sector de envases y tapas plásticas. Blog de AFIN srl.',
 }
 
-export default function BlogPage() {
+export default async function BlogPage() {
+  const newsletter = await newsletterFlag()
   return (
     <main id="main-content">
       <section className="blog-section">
@@ -16,6 +18,7 @@ export default function BlogPage() {
         </div>
       </section>
 
+      {newsletter && (
       <section className="newsletter-section">
         <div className="newsletter-inner">
           <p className="section-label">Novedades</p>
@@ -24,6 +27,7 @@ export default function BlogPage() {
           <NewsletterForm />
         </div>
       </section>
+      )}
     </main>
   )
 }

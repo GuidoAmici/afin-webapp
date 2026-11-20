@@ -1,6 +1,11 @@
 'use server'
 
+import { newsletterFlag } from '@/flags'
+
 export async function subscribeToNewsletter(email: string): Promise<{ success: boolean }> {
+  // Puerta real del flag: ocultar el formulario no alcanza, la action es invocable.
+  if (!(await newsletterFlag())) return { success: false }
+
   const apiKey = process.env.BREVO_API_KEY
   const listId = process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined
 

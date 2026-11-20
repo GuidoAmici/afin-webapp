@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 
+import { pedidosFlag } from '../flags'
+import { requiereFlag } from './flags-del-entorno'
+
 const pages = [
   { path: '/',               title: /afin/i },
   { path: '/quienes-somos', title: /afin/i },
@@ -37,6 +40,8 @@ test('página de contacto muestra datos de la empresa', async ({ page }) => {
 })
 
 test('carrito vacío muestra botón "Ver productos" en mobile', async ({ page }) => {
+  // El carrito es parte del canal de pedidos: con el flag apagado no hay botón.
+  await requiereFlag(pedidosFlag)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await page.getByRole('button', { name: /ver carrito/i }).click()
