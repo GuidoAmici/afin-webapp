@@ -7,6 +7,7 @@
 # release-please (ADR-0006, ADR-0007): tras cada push a stg abre el Release PR,
 # lo auto-mergea y crea el tag en el mismo run — la versión avanza sola con cada
 # merge a stg. La promoción a prod es workflow_dispatch en release-prod.yml.
+# Runner fijado a ubuntu-24.04: Playwright aún no soporta chromium en ubuntu 26.04 (el actual ubuntu-latest).
 name: Stg CI — checks + migraciones + deploy
 
 on:
@@ -25,7 +26,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# RUNNER: `vars.CI_RUNNER` elige dónde corre cada job. Vacía → `ubuntu-latest`
+# RUNNER: `vars.CI_RUNNER` elige dónde corre cada job. Vacía → `ubuntu-24.04`
 # (GitHub). Con un label de runner propio → ese runner en la máquina del operador,
 # que no consume minutos (hasta el refill del 2026-10-31). Volver a GitHub es
 # borrar la variable, sin tocar este archivo. Los pasos con
@@ -36,7 +37,7 @@ concurrency:
 # Dependabot nunca va al runner propio: su PR corre `npm ci` o actions nuevas, código de
 # terceros sin revisar, con el usuario del operador. `github.actor` cubre PR abierto,
 # rebase y re-run (el re-run conserva al actor original); `pull_request.user.login`
-# cubre un commit humano sobre la rama de Dependabot. Esos PRs caen a `ubuntu-latest`.
+# cubre un commit humano sobre la rama de Dependabot. Esos PRs caen a `ubuntu-24.04`.
 jobs:
   # Ahorro de minutos de Actions (el 2026-10-10 se agotaron los del mes y el CI
   # de los tres repos quedó parado). Un PR o push que sólo toca documentación no
@@ -50,7 +51,7 @@ jobs:
     name: Qué cambió (decide qué jobs corren)
     # El Release PR (#290) va siempre a GitHub: con un solo runner propio, el
     # job quedaría en cola detrás del que espera y el run no terminaría a tiempo.
-    runs-on: ${{ (github.event_name == 'pull_request' && github.actor == 'github-actions[bot]' && github.event.pull_request.user.login == 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--stg--')) && 'ubuntu-latest' || (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.actor == 'github-actions[bot]' && github.event.pull_request.user.login == 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--stg--')) && 'ubuntu-24.04' || (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 3
     outputs:
       codigo: ${{ steps.clasificar.outputs.codigo }}
@@ -113,7 +114,7 @@ jobs:
     name: Lint + tipos + tests + build
     needs: cambios
     if: needs.cambios.outputs.codigo == 'true'
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -160,7 +161,7 @@ jobs:
     name: pgTAP — RLS y RPCs (stack local)
     needs: cambios
     if: needs.cambios.outputs.base == 'true'
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     # Un cuelgue de red debe fallar rápido, no consumir el presupuesto de
     # Actions durante horas: la suite completa corre en ~2 min.
     timeout-minutes: 15
@@ -215,7 +216,7 @@ jobs:
     name: E2E local — flujos que escriben (stack Supabase)
     needs: cambios
     if: needs.cambios.outputs.codigo == 'true'
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     # El stack completo tarda más que el `db start` del pgTAP; aun así, un
     # cuelgue debe fallar rápido y no comerse el presupuesto de Actions.
     timeout-minutes: 25
@@ -330,7 +331,7 @@ jobs:
       && (needs.cambios.outputs.base == 'true'
           || (github.event_name == 'push' && needs.cambios.outputs.codigo == 'true'))
     needs: [cambios, checks, pgtap]
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -359,7 +360,7 @@ jobs:
     # de verdad, no se deploya nada.
     if: ${{ github.event_name == 'pull_request' && !cancelled() && needs.cambios.outputs.codigo == 'true' && needs.migrate-stg.result != 'failure' }}
     needs: [cambios, migrate-stg]
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       url: ${{ steps.wait.outputs.url }}
@@ -424,7 +425,7 @@ jobs:
     # no debe arrastrar al deploy. Fallado, sí lo frena.
     if: ${{ github.event_name == 'push' && !cancelled() && needs.cambios.outputs.codigo == 'true' && needs.migrate-stg.result == 'success' }}
     needs: [cambios, migrate-stg]
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -503,7 +504,7 @@ jobs:
     # el guard HAS_VERCEL propio hace el skip limpio.
     needs: [deploy-preview, deploy-stg]
     if: always() && (needs.deploy-preview.result == 'success' || needs.deploy-stg.result == 'success')
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
       HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
@@ -590,7 +591,7 @@ jobs:
     name: Release automático → stg
     if: github.event_name == 'push'
     needs: deploy-stg
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: write

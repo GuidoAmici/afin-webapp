@@ -48,7 +48,7 @@ concurrency:
 jobs:
   gate:
     name: ¿Sale solo o espera a un humano?
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
       seguir: ${{ steps.decidir.outputs.seguir || steps.vacio.outputs.seguir }}
@@ -124,7 +124,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.seguir == 'true'
     timeout-minutes: 30
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     # Donde viven los secretos de la DB de prod y donde irían las reglas de aprobación.
     environment: prod
     steps:
@@ -215,7 +215,7 @@ jobs:
   deploy-prod:
     name: Deploy prod → Vercel
     needs: release
-    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       # Sin token no hay deploy: el release ya mergeó a prod, y un job verde sin

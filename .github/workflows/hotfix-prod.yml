@@ -20,7 +20,7 @@ concurrency:
 jobs:
   test:
     name: Lint + typecheck + Playwright (vars producción)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,7 +77,7 @@ jobs:
   merge-to-prod:
     name: Migraciones prod + merge hotfix/* → prod
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Donde viven los secretos de la DB de prod (igual que release-prod.yml).
     environment: prod
@@ -122,7 +122,7 @@ jobs:
   deploy-prod:
     name: Deploy prod → Vercel
     needs: merge-to-prod
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -181,7 +181,7 @@ jobs:
   back-merge-stg:
     name: Back-merge hotfix → stg
     needs: deploy-prod
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -211,7 +211,7 @@ jobs:
       always() &&
       needs.merge-to-prod.result == 'success' &&
       needs.deploy-prod.result == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
