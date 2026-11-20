@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test'
 
+import { pedidosFlag } from '../flags'
+import { requiereFlag } from './flags-del-entorno'
+
 test('POST /api/orders rechaza solicitudes no autenticadas', async ({ request }) => {
+  // Con el flag apagado la ruta responde 404 antes de mirar la sesión.
+  await requiereFlag(pedidosFlag)
   const res = await request.post('/api/orders', {
     data: {
       items: [{ productId: 'test-id', productName: 'Test', image: '', quantity: 1, unitPrice: '0.01' }],

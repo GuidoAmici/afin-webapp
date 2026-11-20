@@ -3,7 +3,9 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests',
   // tests/local corre contra el stack local (playwright.local.config.ts), no contra el deploy.
-  testIgnore: 'local/**',
+  // tests/unit son tests de Vitest (*.test.ts): el testMatch por default de
+  // Playwright también los toma, y al importar vitest se cae la suite entera.
+  testIgnore: ['local/**', 'unit/**'],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   reporter: [['html', { open: 'never' }], ['list']],

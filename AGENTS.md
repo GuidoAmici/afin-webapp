@@ -13,7 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 Hay dos entornos: **`stg`** (base de prueba, `https://stg.afinsrl.com.ar`) y **`prod`**. No hay `dev` (ADR-0006).
 
 - **Ramas cortas.** Cada trabajo sale de `stg` en su propia rama y vuelve a `stg` por PR. `prod` sólo recibe merges de `stg` (release, `release-prod.yml`) o de una rama `hotfix/*` (`hotfix-prod.yml`, que se despacha a mano).
-- **Todo lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible (esquema, refactor, arreglo interno) no lo necesita.
+- **Todo lo nuevo y visible va detrás de un flag apagado en producción** (`flags.ts`, en la raíz: flags de release con `flags/next`, valor fijo por entorno). Un cambio sin función visible (esquema, refactor, arreglo interno) no lo necesita. Los ops toggles que mueve un admin en caliente (`payments_enabled`, etc.) son otra cosa: viven en la tabla `settings` y se leen con `lib/settings.ts`.
 - **Migraciones expand-only** (sólo agregan). Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido.**
 
 ## Hotfix
@@ -78,7 +78,7 @@ Cada ítem lleva **el link directo**, ya con los query params o el estado que ha
    - **Los E2E en `success`, salvo que `cambios` clasifique el PR como sólo docs.** `stg-ci.yml` corre en cada `pull_request` (tipos por defecto, sin condición de draft) y el job `cambios` clasifica el diff. No alcanza con que `gh pr checks` dé verde: GitHub muestra un job salteado como verde, así que mirá que los E2E hayan corrido (`success`) sobre el último commit.
    - **PR de sólo docs.** Si todos los archivos del diff caen en `^([^/]+\.md|docs/.*|\.claude/.*)$` (la clasificación de `cambios`), los jobs de código quedan `skipped` y eso es lo **esperado**: el gate se da por cumplido con `cambios` en verde.
 2. **Revisión de código hecha por otro agente** (`/code-review` o un subagente revisor) sobre el diff final, **sin hallazgos abiertos**. Se deja constancia en un comentario del PR.
-3. **Lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible no lo necesita.
+3. **Lo nuevo y visible va detrás de un flag apagado en producción** (`flags.ts`, en la raíz). Un cambio sin función visible no lo necesita. Si un spec de `tests/` usa la feature, arranca con `requiereFlag(<flag>)` (`tests/flags-del-entorno.ts`): el E2E del hotfix corre con los flags de producción y ahí ese paso se saltea.
 4. **Migraciones expand-only.** Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido**, pedida por el Chief of Staff.
 5. **Ninguna decisión de negocio pendiente** (ver arriba).
 

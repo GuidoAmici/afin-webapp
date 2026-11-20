@@ -84,7 +84,13 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      - run: npx playwright test
+      # VERCEL_ENV=production: el dev server corre con los flags de producción
+      # (el proceso pisa a .env.local) y los specs leen el mismo valor para
+      # saltear lo que depende de un flag apagado ahí (tests/flags-del-entorno.ts).
+      - name: Playwright — flags de producción
+        run: npx playwright test
+        env:
+          VERCEL_ENV: production
 
       - name: Subir reporte
         if: always()
