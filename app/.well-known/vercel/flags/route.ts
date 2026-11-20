@@ -1,4 +1,5 @@
 import { createFlagsDiscoveryEndpoint, getProviderData } from 'flags/next'
+import type { Flag } from 'flags/next'
 import * as exportsDeFlags from '@/flags'
 
 /**
@@ -10,7 +11,9 @@ import * as exportsDeFlags from '@/flags'
  * consultar a Vercel Flags.
  */
 // `porEntorno` también se exporta (la usan los tests) y no es un flag: se deja afuera.
-const flags = Object.fromEntries(Object.entries(exportsDeFlags).filter(([nombre]) => nombre !== 'porEntorno'))
+const flags: Record<string, Flag<boolean>> = Object.fromEntries(
+  Object.entries(exportsDeFlags).filter(([nombre]) => nombre !== 'porEntorno'),
+) as Record<string, Flag<boolean>>
 
 export const GET = createFlagsDiscoveryEndpoint(async () => {
   return getProviderData(flags)
