@@ -9,6 +9,110 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      acceso_asignaciones: {
+        Row: {
+          id: string
+          otorgado_en: string
+          otorgado_por: string | null
+          permiso: string
+          revocado_en: string | null
+          user_id: string
+          vence_en: string | null
+        }
+        Insert: {
+          id?: string
+          otorgado_en?: string
+          otorgado_por?: string | null
+          permiso: string
+          revocado_en?: string | null
+          user_id: string
+          vence_en?: string | null
+        }
+        Update: {
+          id?: string
+          otorgado_en?: string
+          otorgado_por?: string | null
+          permiso?: string
+          revocado_en?: string | null
+          user_id?: string
+          vence_en?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acceso_asignaciones_permiso_fkey"
+            columns: ["permiso"]
+            isOneToOne: false
+            referencedRelation: "acceso_permisos"
+            referencedColumns: ["clave"]
+          },
+        ]
+      }
+      acceso_permisos: {
+        Row: {
+          clave: string
+          descripcion: string
+          estado: string
+          sensible: boolean
+        }
+        Insert: {
+          clave: string
+          descripcion: string
+          estado?: string
+          sensible?: boolean
+        }
+        Update: {
+          clave?: string
+          descripcion?: string
+          estado?: string
+          sensible?: boolean
+        }
+        Relationships: []
+      }
+      acceso_plantilla_permisos: {
+        Row: {
+          permiso: string
+          plantilla: string
+        }
+        Insert: {
+          permiso: string
+          plantilla: string
+        }
+        Update: {
+          permiso?: string
+          plantilla?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acceso_plantilla_permisos_permiso_fkey"
+            columns: ["permiso"]
+            isOneToOne: false
+            referencedRelation: "acceso_permisos"
+            referencedColumns: ["clave"]
+          },
+          {
+            foreignKeyName: "acceso_plantilla_permisos_plantilla_fkey"
+            columns: ["plantilla"]
+            isOneToOne: false
+            referencedRelation: "acceso_plantillas"
+            referencedColumns: ["clave"]
+          },
+        ]
+      }
+      acceso_plantillas: {
+        Row: {
+          clave: string
+          descripcion: string
+        }
+        Insert: {
+          clave: string
+          descripcion: string
+        }
+        Update: {
+          clave?: string
+          descripcion?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           id: string
@@ -455,6 +559,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       jwt_role: { Args: never; Returns: string }
+      mis_permisos: { Args: never; Returns: string[] }
       prepare_checkout: {
         Args: { p_order_id: string; p_payment_method: string }
         Returns: {
@@ -481,6 +586,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      puedo_entrar_panel: { Args: never; Returns: boolean }
       replace_order_items: {
         Args: { p_items: Json; p_notes?: string; p_order_id: string }
         Returns: undefined
