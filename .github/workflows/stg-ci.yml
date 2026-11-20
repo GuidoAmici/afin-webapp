@@ -6,7 +6,10 @@
 # Migraciones: scripts/db-push.mjs (Management API + PAT; sin password de DB).
 # release-please (ADR-0006, ADR-0007): tras cada push a stg abre el Release PR,
 # lo auto-mergea y crea el tag en el mismo run — la versión avanza sola con cada
-# merge a stg. La promoción a prod es workflow_dispatch en release-prod.yml.
+# merge a stg. Promoción a prod: en cada push a stg, `auto-release` llama a
+# release-prod.yml con `automatico: true`; su gate frena si `prod..stg` trae
+# migraciones y deja escrito cómo salir a mano. Un `workflow_dispatch` manual de
+# release-prod.yml saltea el gate.
 # Runner fijado a ubuntu-24.04: Playwright aún no soporta chromium en ubuntu 26.04 (el actual ubuntu-latest).
 name: Stg CI — checks + migraciones + deploy
 
@@ -167,6 +170,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Antes de cualquier comando `supabase`: config.toml lee variables con
+      # env(), y el CLI no parsea el archivo entero si una falta —un bool sin
+      # setear da «'auth.enable_signup' cannot parse value as 'bool'»—. Quedan
+      # en el entorno de todos los pasos siguientes del job.
+      - name: Variables del stack local (supabase/env/local.env)
+        run: grep -E '^[A-Z_]+=' supabase/env/local.env >> "$GITHUB_ENV"
       # Doble pin, a propósito: el ACTION va por SHA (no `@v2` móvil) y la CLI
       # por versión fija (`version:` abajo). El tag `@v2` se movió una vez a una
       # release que resolvía su binario por la API de GitHub sin token, se comía
@@ -222,6 +231,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Antes de cualquier comando `supabase`: config.toml lee variables con
+      # env(), y el CLI no parsea el archivo entero si una falta —un bool sin
+      # setear da «'auth.enable_signup' cannot parse value as 'bool'»—. Quedan
+      # en el entorno de todos los pasos siguientes del job.
+      - name: Variables del stack local (supabase/env/local.env)
+        run: grep -E '^[A-Z_]+=' supabase/env/local.env >> "$GITHUB_ENV"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -346,6 +361,12 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: wbsvxdquzvsawmjoiwat
           MIGRACIONES_EXTERNAS: ${{ vars.MIGRACIONES_EXTERNAS }}
+          # Sólo acá, la base de prueba: un PR de migración abierto ya aplicó su
+          # archivo (este mismo job corre en pull_request) y las demás ramas no
+          # lo tienen. Con el default (frenar) cada push a stg y cada otro PR de
+          # base quedaría en rojo mientras ese PR siga abierto. Avisa y sigue.
+          # release-prod y hotfix-prod no lo setean: en prod frena.
+          DESCONOCIDAS: avisar
 
   deploy-preview:
     name: Deploy preview (PR) → Vercel
@@ -367,9 +388,21 @@ jobs:
     env:
       HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
-      - name: Vercel sin configurar → skip
+      # Sin VERCEL_TOKEN el job falla: un preview que no se deployó no puede
+      # dejar el gate en verde. La única excepción son los PRs de Dependabot:
+      # GitHub les pasa los secrets de su propio scope (`dependabot`), donde
+      # VERCEL_TOKEN no está, a propósito — ahí se saltea y el E2E también.
+      - name: VERCEL_TOKEN ausente
         if: env.HAS_VERCEL != 'true'
-        run: echo "VERCEL_TOKEN no esta configurado - el preview E2E se skipea"
+        env:
+          ES_DEPENDABOT: ${{ github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]' }}
+        run: |
+          if [ "$ES_DEPENDABOT" = "true" ]; then
+            echo "::notice::PR de Dependabot: sus secrets no traen VERCEL_TOKEN — el preview y el E2E se saltean."
+            exit 0
+          fi
+          echo "::error::Falta el secreto VERCEL_TOKEN: el preview no se deployó y el gate E2E no puede correr. Configurarlo y re-correr el job."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_VERCEL == 'true'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -433,9 +466,14 @@ jobs:
     env:
       HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
-      - name: Vercel sin configurar → skip
+      # Sin VERCEL_TOKEN el job falla, como deploy-prod en release-prod.yml: si
+      # pasara en verde, auto-release vería un deploy-stg "exitoso" que no
+      # deployó nada. Este job sólo corre en push, así que Dependabot no llega.
+      - name: VERCEL_TOKEN ausente
         if: env.HAS_VERCEL != 'true'
-        run: echo "VERCEL_TOKEN no esta configurado - el deploy se activa con el issue 12"
+        run: |
+          echo "::error::Falta el secreto VERCEL_TOKEN: stg no se deployó. Configurarlo y re-correr el job."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_VERCEL == 'true'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -499,9 +537,9 @@ jobs:
     # Corre tras el deploy que haya aplicado (deploy-preview en PR, deploy-stg
     # en push) — el otro siempre está skipped por su propio `if` de evento, así
     # que `always()` es necesario para no heredar ese skip (#66, ADR-0010 §1).
-    # `result == 'success'` cubre también el caso HAS_VERCEL=false: esos jobs
-    # "corren" (solo hacen echo) y terminan en success sin deployar nada — acá
-    # el guard HAS_VERCEL propio hace el skip limpio.
+    # Sin VERCEL_TOKEN los deploys fallan, salvo deploy-preview en un PR de
+    # Dependabot: termina en success sin deployar nada, y acá el guard
+    # HAS_VERCEL propio hace el skip limpio.
     needs: [deploy-preview, deploy-stg]
     if: always() && (needs.deploy-preview.result == 'success' || needs.deploy-stg.result == 'success')
     runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}

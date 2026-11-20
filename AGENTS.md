@@ -22,13 +22,17 @@ Hay dos entornos: **`stg`** (base de prueba, `https://stg.afinsrl.com.ar`) y **`
 
 ## Migración de un PR cerrado sin mergear
 
-Un PR con migración contra `stg` la aplica a la base de prueba al abrirse. Si el PR se cierra sin mergear, la migración queda aplicada ahí. Se limpia a mano, **sólo en la base de prueba, nunca en prod**: borrá los objetos que creó (tablas, funciones, columnas) y borrá su fila de `supabase_migrations.schema_migrations`. Si no, el próximo `db-push` ve una versión remota que el repo no tiene.
+Un PR con migración contra `stg` la aplica a la base de prueba al abrirse. Mientras está abierto, las demás ramas ven en la base de prueba una versión remota que no tienen: `migrate-stg` corre `db-push` con `DESCONOCIDAS=avisar`, que deja un `::warning::` con la lista y sigue, para no trabar los pushes a `stg` ni los otros PRs de base. En prod (`release-prod.yml`, `hotfix-prod.yml`) el modo es el default, `frenar`: una versión desconocida corta el run sin aplicar nada. El guard de colisión (misma versión, otro nombre) frena siempre.
+
+Si el PR se cierra sin mergear, la migración queda aplicada en la base de prueba y el `::warning::` sigue apareciendo en cada run. Se limpia a mano, **sólo en la base de prueba, nunca en prod**: borrá los objetos que creó (tablas, funciones, columnas) y borrá su fila de `supabase_migrations.schema_migrations`.
 
 ## MIGRACIONES_EXTERNAS
 
 Variable de repo (`vars.MIGRACIONES_EXTERNAS`) con las versiones de migración que existen en la base remota y no en `supabase/migrations/`. `scripts/db-push.mjs` frena si encuentra una versión remota desconocida, salvo que esté en esta lista.
 
-Hoy tiene 5 versiones de prod: `20260611155800`, `20260611163152`, `20260611170315`, `20260611172251`, `20260611181537`. Son migraciones de junio de 2026 que se aplicaron a prod con un timestamp distinto al de su archivo en el repo: el objeto existe, la versión no coincide.
+Hoy tiene 5 versiones de prod: `20260611155800`, `20260611163152`, `20260611170315`, `20260611172251`, `20260611181537`. Son migraciones de junio de 2026 que se aplicaron a prod con un timestamp distinto al de su archivo en el repo: el objeto existe, la versión no coincide. La lista sólo evita que `db-push` frene por esas filas; **no hace que se salteen los archivos**.
+
+**El primer release re-corre esos 5 archivos en prod**: `20260610000000_create_profiles`, `20260611000000_create_orders`, `20260611100000_add_tipo_facturacion`, `20260611200000_fix_rls_recursion` y `20260611210000_order_update_policies`. Sus versiones no están en el historial de prod (las filas tienen las versiones de arriba), así que `db-push` los ve pendientes. Son idempotentes —`IF NOT EXISTS`, `DROP … IF EXISTS` antes de cada `CREATE TRIGGER`/`CREATE POLICY`, `CREATE OR REPLACE FUNCTION`—: no fallan sobre objetos que ya existen. Sí reescriben políticas y funciones con su versión de junio; las migraciones posteriores (`20260612000000` en adelante) van detrás en el mismo run, en orden de versión, y las dejan como en el repo. Cada archivo es su propia transacción: si el run corta a mitad, prod puede quedar con políticas de junio hasta que se re-despache el release, que retoma desde el archivo que falló.
 
 **Agregar una versión a la lista necesita el OK de Guido.** Es la forma de decirle al script «esto es esperado»; un agente no la usa para destrabar un push.
 
@@ -64,7 +68,7 @@ Cada ítem lleva **el link directo**, ya con los query params o el estado que ha
 
 **Si el PR trae migraciones**, decirlo arriba: no sale a producción solo (ver `release-prod.yml`).
 
-**Un PR con migración contra `stg` la aplica a la base de stg al abrirse**, no al mergear: el job `migrate-stg` de `stg-ci.yml` corre también en `pull_request`, para que el preview vea el schema del PR. Por eso la migración tiene que ser expand-only (sólo agrega). Si un PR con migración se cierra sin mergear, su tabla o función queda en stg y se limpia a mano (ver arriba).
+**Un PR con migración contra `stg` la aplica a la base de stg al abrirse**, no al mergear: el job `migrate-stg` de `stg-ci.yml` corre también en `pull_request`, para que el preview vea el schema del PR. Por eso la migración tiene que ser expand-only (sólo agrega). Mientras el PR está abierto, `db-push` sólo avisa de esa versión en los demás runs; si el PR se cierra sin mergear, su tabla o función queda en stg y se limpia a mano (ver arriba).
 
 # Merge a stg: lo hace el agente, sin esperar al operador
 

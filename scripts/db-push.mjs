@@ -7,13 +7,19 @@
 // aplica junto con su registro en una sola llamada (transacción única): si
 // falla, no queda ni el cambio ni el registro.
 //
-// Frena (exit 1) si el historial remoto tiene versiones sin archivo local que
-// no estén declaradas en MIGRACIONES_EXTERNAS: una DB que avanzó por fuera del
-// repo no se pisa en silencio. No aplica nada hasta que se resuelva.
+// Versiones remotas sin archivo local y no declaradas en MIGRACIONES_EXTERNAS
+// («desconocidas»): qué se hace con ellas lo decide DESCONOCIDAS.
+//  - `frenar` (default, prod: release y hotfix): exit 1 sin aplicar nada. Una
+//    DB que avanzó por fuera del repo no se pisa en silencio.
+//  - `avisar` (sólo la base de prueba, migrate-stg): ::warning:: y sigue. Ahí
+//    un PR de migración abierto aplica su archivo antes del merge, y las demás
+//    ramas no lo tienen: frenar dejaría en rojo cada push a stg y cada otro PR
+//    de base mientras ese PR siga abierto.
+// El guard de colisión de nombre frena en los dos modos.
 //
 // Uso:
 //   SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... \
-//   [MIGRACIONES_EXTERNAS=ver1,ver2] node scripts/db-push.mjs
+//   [MIGRACIONES_EXTERNAS=ver1,ver2] [DESCONOCIDAS=frenar|avisar] node scripts/db-push.mjs
 
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -38,6 +44,30 @@ export function planificar({ locales, remotas, externas }) {
     .sort((a, b) => (versionDe(a) < versionDe(b) ? -1 : versionDe(a) > versionDe(b) ? 1 : 0));
   const desconocidas = remotas.filter((r) => !vLocales.has(versionDe(r)) && !vExternas.has(versionDe(r)));
   return { aplicar, desconocidas };
+}
+
+// Qué hacer con las versiones desconocidas según el modo. Pura.
+// Devuelve `seguir` (si se aplica lo pendiente) y `mensaje` (null si no hay
+// nada que decir). Un modo que no es `avisar` frena: falla hacia el lado seguro.
+export function decidirDesconocidas(desconocidas, modo) {
+  if (!desconocidas.length) return { seguir: true, mensaje: null };
+  const lista = desconocidas.join(', ');
+  if (modo === 'avisar') {
+    return {
+      seguir: true,
+      mensaje:
+        `::warning::${desconocidas.length} migración(es) remota(s) sin archivo local: ${lista}. ` +
+        `Se sigue (DESCONOCIDAS=avisar): suele ser un PR de migración abierto. Si el PR se cerró ` +
+        `sin mergear, limpiá su migración de la base de prueba (ver AGENTS.md).`,
+    };
+  }
+  return {
+    seguir: false,
+    mensaje:
+      `✗ ${desconocidas.length} migración(es) remota(s) sin archivo local y no declaradas: ${lista}.\n` +
+      `  No se aplicó nada. Traé el archivo al repo o, si es a propósito, agregá la version a ` +
+      `MIGRACIONES_EXTERNAS (variable del repo, lista separada por comas).`,
+  };
 }
 
 async function main() {
@@ -116,15 +146,15 @@ async function main() {
     .map((v) => v.trim())
     .filter(Boolean);
   const { aplicar, desconocidas } = planificar({ locales: files, remotas: [...remote.keys()], externas });
-  if (desconocidas.length) {
-    console.error(
-      `✗ ${ref} tiene ${desconocidas.length} migración(es) sin archivo local y no declaradas: ` +
-        `${desconocidas.join(', ')}.\n` +
-        `  No se aplicó nada. Traé el archivo al repo o, si es a propósito, agregá la version a ` +
-        `MIGRACIONES_EXTERNAS (variable del repo, lista separada por comas).`,
-    );
+  const modo = process.env.DESCONOCIDAS || 'frenar';
+  if (modo !== 'frenar' && modo !== 'avisar') {
+    console.error(`DESCONOCIDAS="${modo}" no es un modo válido (frenar | avisar).`);
     process.exit(1);
   }
+  const { seguir, mensaje } = decidirDesconocidas(desconocidas, modo);
+  // `::warning::` tiene que abrir la línea para que Actions lo tome como anotación.
+  if (mensaje) (seguir ? console.log : console.error)(mensaje);
+  if (!seguir) process.exit(1);
 
   let applied = 0;
   for (const f of aplicar) {
