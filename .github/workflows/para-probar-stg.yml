@@ -1,0 +1,30 @@
+# Pasa los ítems de «Sólo vos» de cada PR mergeado a stg al issue fijado
+# «Para probar en stg» (AGENTS.md, «Merge a stg»). El operador prueba stg con
+# todo junto, no PR por PR.
+name: Para probar en stg
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [stg]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: para-probar-stg
+  cancel-in-progress: false
+
+jobs:
+  agregar:
+    if: github.event.pull_request.merged == true
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Agregar los ítems al issue
+        run: python3 .github/scripts/para_probar_stg.py
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}

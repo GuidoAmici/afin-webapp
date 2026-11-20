@@ -1,19 +1,20 @@
-# dev se retiró (ver docs/adr): el backmerge pasa a stg, que ahora es la única
-# rama por debajo de prod.
-name: Hotfix — test + merge to prod + back-merge stg
+# Hotfix de emergencia directo a prod + back-merge a stg (ADR-0006).
+# Uso: crear una rama hotfix/* desde prod, commitear el fix y despachar este
+# workflow eligiendo esa rama en «Use workflow from». Ya no se dispara por push:
+# un hotfix toca prod y, si trae migraciones, la base de prod; lo despacha una
+# persona.
+name: Hotfix — test + migraciones + merge to prod + back-merge stg
 
 on:
-  push:
-    branches:
-      - 'hotfix/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 
+# Mismo grupo que release-prod.yml: un hotfix y un release no corren a la vez.
 concurrency:
-  group: deploy-production
+  group: release-prod
   cancel-in-progress: false
 
 jobs:
@@ -74,11 +75,15 @@ jobs:
           retention-days: 7
 
   merge-to-prod:
-    name: Merge hotfix/* → prod
+    name: Migraciones prod + merge hotfix/* → prod
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    # Donde viven los secretos de la DB de prod (igual que release-prod.yml).
+    environment: prod
     steps:
+      # El ruleset «Protect stg and prod» sólo deja pushear a prod y a stg a la
+      # GitHub App (bypass): con github.token los pushes serían rechazados.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
@@ -89,6 +94,21 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Database-first, como release-prod.yml: si la migración falla, prod no se toca.
+      - name: Migraciones → AFIN DB prod
+        run: node scripts/db-push.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: myzngskhjnrmnonrksmj
+          MIGRACIONES_EXTERNAS: ${{ vars.MIGRACIONES_EXTERNAS }}
 
       - name: Merge hotfix → prod
         run: |

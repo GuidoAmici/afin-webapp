@@ -1,5 +1,7 @@
 # Feature flags por variable de entorno, con la puerta real en el servidor
 
+> Superseded en parte por [ADR-0006](0006-plataforma-de-newhaze.md): sólo en lo que toca a los release toggles (el mecanismo de flags de release se alinea con el de New Haze y el flujo `dev → stg → prod` pasa a `stg → prod`). Los ops toggles de `settings` siguen vigentes tal como están acá.
+
 El flujo de deploy es `dev → stg → Release Please → prod` (ver ADR-0004): todo lo que entra a `dev` llega a `stg` y eventualmente se agrupa en un release a producción. Eso significa que una feature a medio terminar no tiene forma de quedarse fuera de producción salvo no mergearla, lo que empuja a ramas largas. Además, el checkout de Mercado Pago todavía no tiene credenciales de producción (#25) y el canal de pedidos necesita poder apagarse si algo sale mal, sin revertir un release.
 
 Se decidió introducir flags de release en `lib/flags.ts`, alimentados por variables de entorno `NEXT_PUBLIC_FF_*` configuradas por entorno en Vercel. `lib/flags.ts` es el único lugar que lee esas variables: expone un objeto `flags` tipado y un parser (`parseFlag`) que acepta `1/true/on` y `0/false/off`, y cae al default del código ante un valor vacío o desconocido en vez de adivinar.

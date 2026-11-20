@@ -1,0 +1,79 @@
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+# Entornos y ramas
+
+Hay dos entornos: **`stg`** (base de prueba, `https://stg.afinsrl.com.ar`) y **`prod`**. No hay `dev` (ADR-0006).
+
+- **Ramas cortas.** Cada trabajo sale de `stg` en su propia rama y vuelve a `stg` por PR. `prod` sólo recibe merges de `stg` (release, `release-prod.yml`) o de una rama `hotfix/*` (`hotfix-prod.yml`, que se despacha a mano).
+- **Todo lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible (esquema, refactor, arreglo interno) no lo necesita.
+- **Migraciones expand-only** (sólo agregan). Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido.**
+
+## Migración de un PR cerrado sin mergear
+
+Un PR con migración contra `stg` la aplica a la base de prueba al abrirse. Si el PR se cierra sin mergear, la migración queda aplicada ahí. Se limpia a mano, **sólo en la base de prueba, nunca en prod**: borrá los objetos que creó (tablas, funciones, columnas) y borrá su fila de `supabase_migrations.schema_migrations`. Si no, el próximo `db-push` ve una versión remota que el repo no tiene.
+
+## MIGRACIONES_EXTERNAS
+
+Variable de repo (`vars.MIGRACIONES_EXTERNAS`) con las versiones de migración que existen en la base remota y no en `supabase/migrations/`. `scripts/db-push.mjs` frena si encuentra una versión remota desconocida, salvo que esté en esta lista.
+
+Hoy tiene 5 versiones de prod: `20260611155800`, `20260611163152`, `20260611170315`, `20260611172251`, `20260611181537`. Son migraciones de junio de 2026 que se aplicaron a prod con un timestamp distinto al de su archivo en el repo: el objeto existe, la versión no coincide.
+
+**Agregar una versión a la lista necesita el OK de Guido.** Es la forma de decirle al script «esto es esperado»; un agente no la usa para destrabar un push.
+
+## `register_transfer_payment(uuid,text)`
+
+Existe en la base de prueba **sin migración**: viene de una rama local, `feat/15-pago-transferencia`. **Nunca llega a prod.** Quien retome esa rama escribe su migración, o la borra de la base de prueba.
+
+# Convención de Pull Requests
+
+Todo PR **debe** cerrar su descripción con dos bloques. La regla que los separa:
+
+> **Si una máquina puede verificarlo, la máquina lo verifica.** Al humano sólo le queda lo que requiere criterio.
+
+## 1 · Verificado automáticamente
+
+Qué se probó y **con qué resultado concreto** — no "se corrieron los tests", sino el número, el comando o la respuesta. Va todo lo comprobable sin ojos: rutas que responden 200, flags en sus dos estados, textos presentes en el HTML renderizado, tipos, lint, build, E2E.
+
+Si dudás de si un ítem va acá o abajo: **intentá verificarlo primero**. Un `curl` a la ruta con el flag forzado tarda menos que escribir la instrucción para que lo haga otro.
+
+## 2 · Sólo vos
+
+Lo que **no** se puede automatizar: copy, tono, jerarquía visual, si una decisión de marca se siente bien, si el orden de una página tiene sentido para quien la lee.
+
+Cada ítem lleva **el link directo**, ya con los query params o el estado que haga falta — no las instrucciones para llegar. El humano hace clic y mira, no navega ni configura. **El link apunta a stg** (`https://stg.afinsrl.com.ar/…`), no al preview del PR: el operador no prueba PR por PR, prueba stg con todo junto (ver abajo).
+
+```md
+## Sólo vos
+- [ ] [El copy del catálogo](https://stg.afinsrl.com.ar/productos) — ¿se entiende sin explicación?
+- [ ] [Jerarquía del hero](https://stg.afinsrl.com.ar/) en teléfono
+```
+
+**Sólo vos no es para decisiones.** Una decisión de negocio se resuelve **antes** de abrir el PR: quien la necesita se la pasa al Chief of Staff, que la junta con las demás y vuelve con la respuesta. Un PR se abre cuando ya no espera ninguna decisión del operador.
+
+**Si el PR trae migraciones**, decirlo arriba: no sale a producción solo (ver `release-prod.yml`).
+
+**Un PR con migración contra `stg` la aplica a la base de stg al abrirse**, no al mergear: el job `migrate-stg` de `stg-ci.yml` corre también en `pull_request`, para que el preview vea el schema del PR. Por eso la migración tiene que ser expand-only (sólo agrega). Si un PR con migración se cierra sin mergear, su tabla o función queda en stg y se limpia a mano (ver arriba).
+
+# Merge a stg: lo hace el agente, sin esperar al operador
+
+**El agente que abrió el PR lo mergea a `stg`** cuando se cumplen **todos** estos gates. No hace falta la revisión del operador.
+
+1. **CI completo en verde** sobre el último commit: lint, tipos, tests, build, pgTAP, E2E, Playwright y migraciones a stg.
+   - **Los E2E en `success`, no en `skipped`.** GitHub muestra un job salteado como verde. En un PR draft los E2E no corren, y tampoco en el re-run de un run que empezó en draft, porque el payload queda congelado. Al marcar el PR listo, esperá el run del evento `ready_for_review` y mirá sus E2E. No alcanza con que `gh pr checks` dé verde: puede estar mostrando el run del draft.
+   - **Un PR de sólo docs no tiene run** (`paths-ignore` de `stg-ci.yml`). Sin checks, el gate se da por cumplido si **todos** los archivos del diff caen en esa lista.
+2. **Revisión de código hecha por otro agente** (`/code-review` o un subagente revisor) sobre el diff final, **sin hallazgos abiertos**. Se deja constancia en un comentario del PR.
+3. **Lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible no lo necesita.
+4. **Migraciones expand-only.** Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido**, pedida por el Chief of Staff.
+5. **Ninguna decisión de negocio pendiente** (ver arriba).
+
+Si un gate no se cumple, el PR espera y el agente avisa al Chief of Staff qué falta. El merge es con `--match-head-commit` sobre el SHA que se revisó.
+
+**Qué prueba el operador y cuándo.** Al mergear, los ítems de *Sólo vos* pasan solos al issue fijado **«Para probar en stg»** (workflow `para-probar-stg.yml`). El operador lo recorre cuando quiere —por ejemplo, antes de un release— y tilda lo que le cierra.

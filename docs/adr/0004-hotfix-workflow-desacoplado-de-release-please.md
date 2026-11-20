@@ -1,5 +1,7 @@
 # Hotfix workflow desacoplado del flujo de Release Please
 
+> Superseded by [ADR-0006](0006-plataforma-de-newhaze.md).
+
 `dev-ci.yml` mergea automáticamente todo lo que llega a `dev` hacia `stg`. Esto hace que `stg` acumule features incompletos junto con bugfixes. Release Please agrupa el estado completo de `stg` en cada PR a `prod`, por lo que un hotfix urgente no puede llegar a producción de forma independiente sin arrastrar código no listo.
 
 Se decidió introducir un tercer workflow (`hotfix-prod.yml`) que opera sobre ramas `hotfix/*` cortadas desde `prod`. Al hacer push a una rama `hotfix/*`, el workflow corre lint + type-check + Playwright con variables de producción, mergea directamente a `prod`, deploya a Vercel, y hace back-merge automático a `dev`. No incluye migraciones de Supabase — cualquier hotfix que requiera un cambio de schema debe ir por el flujo normal de Release Please.
