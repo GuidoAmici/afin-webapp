@@ -4,8 +4,10 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useFlags } from '@/components/flags-provider'
 
 function LoginForm() {
+  const { registroClientes } = useFlags()
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect') ?? '/'
@@ -48,12 +50,14 @@ function LoginForm() {
       <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--fg-1)' }}>
         Ingresá a tu cuenta
       </h1>
-      <p style={{ fontSize: 14, color: 'var(--fg-3)', marginBottom: 28 }}>
-        ¿No tenés cuenta?{' '}
-        <Link href="/auth/registro" style={{ color: 'var(--orange-600)', fontWeight: 500 }}>
-          Registrate
-        </Link>
-      </p>
+      {registroClientes && (
+        <p style={{ fontSize: 14, color: 'var(--fg-3)', marginBottom: 28 }}>
+          ¿No tenés cuenta?{' '}
+          <Link href="/auth/registro" style={{ color: 'var(--orange-600)', fontWeight: 500 }}>
+            Registrate
+          </Link>
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>

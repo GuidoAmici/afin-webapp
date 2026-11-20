@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import LoginModal from './LoginModal'
 import { OrdersIcon, UserIcon, SignOutIcon } from './icons'
-import { flags } from '@/lib/flags'
+import { useFlags } from '@/components/flags-provider'
 
 export default function AccountButton() {
+  const flags = useFlags()
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState<string>('')

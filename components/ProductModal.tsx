@@ -6,7 +6,7 @@ import { catalogBadge, type Product } from '@/lib/products'
 import { useCart } from '@/lib/cart'
 import { useModalBehavior, useOverlayDismiss } from '@/lib/useModalBehavior'
 import { formatARS } from '@/lib/format'
-import { flags } from '@/lib/flags'
+import { useFlags } from '@/components/flags-provider'
 
 interface Props {
   product: Product
@@ -16,6 +16,7 @@ interface Props {
 }
 
 export default function ProductModal({ product, relatedProducts, onClose, onSelectRelated }: Props) {
+  const flags = useFlags()
   const [imgIndex, setImgIndex] = useState(0)
   const [added, setAdded] = useState(false)
   const [qty, setQtyRaw] = useState(1)

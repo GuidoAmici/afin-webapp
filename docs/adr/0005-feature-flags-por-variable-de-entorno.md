@@ -40,3 +40,7 @@ Para que algo funcione tienen que estar los dos en on.
 - Las policies de `settings` quedan como estaban: escribe `is_staff()` (empleado ∪ admin), lee cualquier autenticado. Es decir, **hoy cualquier empleado puede apagar el kill switch de cobros**. PRD-0002 (historias 21/22/26) pide que editar descuento y datos bancarios sea admin-only; esa restricción sigue pendiente y es una decisión de negocio, no un bug. Los tests pgTAP documentan el comportamiento vigente para que el día que se restrinja, falle el test correcto.
 - `opsFlag()` no cachea, a propósito: un kill switch que tarda en hacer efecto no es un kill switch. El costo es una query por PK en el camino del checkout.
 - Los defaults de los ops flags son fail-**open** para `payments_enabled`: si la base no contesta no se cortan los cobros por un hipo de red. Ningún default puede hacer que se cobre de más, así que el riesgo es asimétrico y conviene abrir.
+
+## Revisión: `flags/next`, valor fijo por entorno
+
+Los flags de release dejaron de ser variables `NEXT_PUBLIC_FF_*`. Viven en `flags.ts` (raíz), con `flags/next` y valor fijo por entorno: apagados en production, encendidos en preview (stg) y desarrollo, igual que en New Haze. Se evalúan en el servidor (`await <flag>()` en server components y route handlers) y los client components leen el valor con `useFlags()`, alimentado desde `app/layout.tsx`. Ya no se inlinean en el bundle ni hace falta configurar variables por entorno en Vercel. Los ops flags de `settings` no cambian. `lib/flags.ts` queda sólo con `parseFlag`, que usa `lib/settings.ts`.

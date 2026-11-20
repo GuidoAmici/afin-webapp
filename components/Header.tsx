@@ -9,7 +9,7 @@ import CartButton from './CartButton'
 import AccountButton from './AccountButton'
 import { ChevronDownIcon, CloseIcon, MenuIcon } from './icons'
 import { useModalBehavior } from '@/lib/useModalBehavior'
-import { flags } from '@/lib/flags'
+import { useFlags } from '@/components/flags-provider'
 
 const NAV_LINKS = [
   { href: '/', label: 'Inicio' },
@@ -27,6 +27,7 @@ const DROPDOWN_ITEMS = [
 ]
 
 export default function Header() {
+  const flags = useFlags()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const pathname = usePathname()

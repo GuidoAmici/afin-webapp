@@ -2,6 +2,16 @@ import type { Metadata } from 'next'
 import { DM_Sans, Nunito } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import { CartProvider } from '@/lib/cart'
+import { FlagsProvider } from '@/components/flags-provider'
+import {
+  checkoutMpFlag,
+  newsletterFlag,
+  panelClientesFlag,
+  panelProductosFlag,
+  pedidosFlag,
+  registroClientesFlag,
+  zonaInternosFlag,
+} from '@/flags'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -56,7 +66,20 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Flags de release: se evalúan una sola vez acá, en el servidor, y los client
+  // components los leen con useFlags() (FlagsProvider).
+  const [pedidos, checkoutMp, registroClientes, newsletter, panelProductos, panelClientes, zonaInternos] =
+    await Promise.all([
+      pedidosFlag(),
+      checkoutMpFlag(),
+      registroClientesFlag(),
+      newsletterFlag(),
+      panelProductosFlag(),
+      panelClientesFlag(),
+      zonaInternosFlag(),
+    ])
+
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
@@ -65,9 +88,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${dmSans.className} ${nunito.variable}`}>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <CartProvider>
-            {children}
-          </CartProvider>
+          <FlagsProvider
+            value={{ pedidos, checkoutMp, registroClientes, newsletter, panelProductos, panelClientes, zonaInternos }}
+          >
+            <CartProvider>
+              {children}
+            </CartProvider>
+          </FlagsProvider>
         </ThemeProvider>
       </body>
     </html>
