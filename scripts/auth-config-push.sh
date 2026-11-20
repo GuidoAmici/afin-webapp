@@ -34,6 +34,13 @@ for v in SUPABASE_AUTH_SITE_URL SUPABASE_AUTH_ADDITIONAL_REDIRECT_URLS SUPABASE_
 done
 [ "$missing" -eq 0 ] || exit 1
 
+# Un valor que todavía contiene env( es un literal sin resolver: no se pushea.
+for v in SUPABASE_AUTH_SITE_URL SUPABASE_AUTH_ADDITIONAL_REDIRECT_URLS SUPABASE_AUTH_ENABLE_SIGNUP; do
+  case "${!v}" in
+    *"env("*) echo "$v contiene env( en Doppler afin-webapp/$env_name: no se pushea" >&2; exit 1 ;;
+  esac
+done
+
 case "$SUPABASE_AUTH_ENABLE_SIGNUP" in
   true|false) ;;
   *) echo "SUPABASE_AUTH_ENABLE_SIGNUP debe ser true o false" >&2; exit 1 ;;
