@@ -18,8 +18,9 @@
     "test:e2e": "playwright test",
     "test:e2e:local": "node scripts/supabase-guard.mjs && playwright test --config playwright.local.config.ts",
     "test:e2e:report": "playwright show-report",
-    "db:types": "node scripts/supabase-guard.mjs && node scripts/db-types.mjs",
-    "db:types:check": "node scripts/supabase-guard.mjs && node scripts/db-types.mjs --check",
+    "db:start:local": "set -a && . supabase/env/local.env && set +a && supabase start",
+    "db:types": "set -a && . supabase/env/local.env && set +a && node scripts/supabase-guard.mjs && node scripts/db-types.mjs",
+    "db:types:check": "set -a && . supabase/env/local.env && set +a && node scripts/supabase-guard.mjs && node scripts/db-types.mjs --check",
     "db:types:remote": "supabase gen types typescript --project-id wbsvxdquzvsawmjoiwat --schema public > lib/database.types.ts",
     "db:guard": "node scripts/supabase-guard.mjs status",
     "db:guard:release": "node scripts/supabase-guard.mjs release"
