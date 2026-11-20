@@ -16,7 +16,7 @@ from datetime import date
 
 STG = "https://stg.afinsrl.com.ar"
 TITULO_SECCION = re.compile(r"s[óo]lo vos", re.IGNORECASE)
-PREVIEW = re.compile(r"https://afin-webapp-[a-z0-9-]+\.vercel\.app")
+PREVIEW = re.compile(r"https://afin-[a-z0-9-]+\.vercel\.app")
 ETIQUETA = "para-probar-stg"
 TITULO = "Para probar en stg"
 CABECERA = (
