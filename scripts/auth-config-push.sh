@@ -46,4 +46,5 @@ fi
 export SUPABASE_ACCESS_TOKEN="$AFIN_SUPABASE_ACCESS_TOKEN"
 
 echo "Pusheando la config de auth a $env_name ($AUTH_CONFIG_PUSH_REF); el CLI muestra el diff y pide confirmación."
+# Sin --yes a propósito: el CLI muestra su propio diff y la persona confirma a mano.
 exec supabase config push --project-ref "$AUTH_CONFIG_PUSH_REF"
