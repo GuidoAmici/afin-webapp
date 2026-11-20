@@ -131,6 +131,255 @@ export type Database = {
         }
         Relationships: []
       }
+      cpi_monthly: {
+        Row: {
+          factor: number
+          month: string
+          pct: number
+        }
+        Insert: {
+          factor: number
+          month: string
+          pct: number
+        }
+        Update: {
+          factor?: number
+          month?: string
+          pct?: number
+        }
+        Relationships: []
+      }
+      fiscal_voucher_imports: {
+        Row: {
+          date_from: string | null
+          date_to: string | null
+          direction: string
+          file_name: string | null
+          id: string
+          loaded_at: string
+          loaded_by: string | null
+          queried_at: string | null
+          query_number: number | null
+          rows_new: number
+          rows_updated: number
+        }
+        Insert: {
+          date_from?: string | null
+          date_to?: string | null
+          direction: string
+          file_name?: string | null
+          id?: string
+          loaded_at?: string
+          loaded_by?: string | null
+          queried_at?: string | null
+          query_number?: number | null
+          rows_new?: number
+          rows_updated?: number
+        }
+        Update: {
+          date_from?: string | null
+          date_to?: string | null
+          direction?: string
+          file_name?: string | null
+          id?: string
+          loaded_at?: string
+          loaded_by?: string | null
+          queried_at?: string | null
+          query_number?: number | null
+          rows_new?: number
+          rows_updated?: number
+        }
+        Relationships: []
+      }
+      fiscal_voucher_types: {
+        Row: {
+          code: number
+          letter: string | null
+          market: string
+          name: string
+          sign: number
+        }
+        Insert: {
+          code: number
+          letter?: string | null
+          market: string
+          name: string
+          sign: number
+        }
+        Update: {
+          code?: number
+          letter?: string | null
+          market?: string
+          name?: string
+          sign?: number
+        }
+        Relationships: []
+      }
+      fiscal_vouchers: {
+        Row: {
+          authorization_code: string | null
+          counterparty_doc: string | null
+          counterparty_doc_type: number | null
+          counterparty_name: string | null
+          created_at: string
+          currency: string
+          direction: string
+          exchange_rate: number
+          exempt: number
+          id: string
+          import_id: string | null
+          issued_on: string
+          issuer_doc: string
+          net_0: number
+          net_10_5: number
+          net_2_5: number
+          net_21: number
+          net_27: number
+          net_5: number
+          net_taxed: number
+          net_untaxed: number
+          number_from: number
+          number_to: number | null
+          other_taxes: number
+          point_of_sale: number
+          total: number
+          total_ars: number | null
+          updated_at: string
+          vat_10_5: number
+          vat_2_5: number
+          vat_21: number
+          vat_27: number
+          vat_5: number
+          vat_total: number
+          voucher_type: number
+        }
+        Insert: {
+          authorization_code?: string | null
+          counterparty_doc?: string | null
+          counterparty_doc_type?: number | null
+          counterparty_name?: string | null
+          created_at?: string
+          currency: string
+          direction: string
+          exchange_rate?: number
+          exempt?: number
+          id?: string
+          import_id?: string | null
+          issued_on: string
+          issuer_doc: string
+          net_0?: number
+          net_10_5?: number
+          net_2_5?: number
+          net_21?: number
+          net_27?: number
+          net_5?: number
+          net_taxed?: number
+          net_untaxed?: number
+          number_from: number
+          number_to?: number | null
+          other_taxes?: number
+          point_of_sale: number
+          total?: number
+          total_ars?: number | null
+          updated_at?: string
+          vat_10_5?: number
+          vat_2_5?: number
+          vat_21?: number
+          vat_27?: number
+          vat_5?: number
+          vat_total?: number
+          voucher_type: number
+        }
+        Update: {
+          authorization_code?: string | null
+          counterparty_doc?: string | null
+          counterparty_doc_type?: number | null
+          counterparty_name?: string | null
+          created_at?: string
+          currency?: string
+          direction?: string
+          exchange_rate?: number
+          exempt?: number
+          id?: string
+          import_id?: string | null
+          issued_on?: string
+          issuer_doc?: string
+          net_0?: number
+          net_10_5?: number
+          net_2_5?: number
+          net_21?: number
+          net_27?: number
+          net_5?: number
+          net_taxed?: number
+          net_untaxed?: number
+          number_from?: number
+          number_to?: number | null
+          other_taxes?: number
+          point_of_sale?: number
+          total?: number
+          total_ars?: number | null
+          updated_at?: string
+          vat_10_5?: number
+          vat_2_5?: number
+          vat_21?: number
+          vat_27?: number
+          vat_5?: number
+          vat_total?: number
+          voucher_type?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_vouchers_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_voucher_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_vouchers_voucher_type_fkey"
+            columns: ["voucher_type"]
+            isOneToOne: false
+            referencedRelation: "fiscal_voucher_types"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      import_declarations: {
+        Row: {
+          cif_usd: number
+          created_at: string
+          created_by: string | null
+          fob_usd: number
+          id: string
+          note: string | null
+          number: string
+          registered_on: string
+          updated_at: string | null
+        }
+        Insert: {
+          cif_usd: number
+          created_at?: string
+          created_by?: string | null
+          fob_usd: number
+          id?: string
+          note?: string | null
+          number: string
+          registered_on: string
+          updated_at?: string | null
+        }
+        Update: {
+          cif_usd?: number
+          created_at?: string
+          created_by?: string | null
+          fob_usd?: number
+          id?: string
+          note?: string | null
+          number?: string
+          registered_on?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       order_events: {
         Row: {
           actor_id: string | null
@@ -480,8 +729,109 @@ export type Database = {
           },
         ]
       }
+      usd_rates: {
+        Row: {
+          blue_buy: number | null
+          blue_sell: number | null
+          date: string
+          mep_sell: number | null
+          oficial_buy: number | null
+          oficial_sell: number | null
+        }
+        Insert: {
+          blue_buy?: number | null
+          blue_sell?: number | null
+          date: string
+          mep_sell?: number | null
+          oficial_buy?: number | null
+          oficial_sell?: number | null
+        }
+        Update: {
+          blue_buy?: number | null
+          blue_sell?: number | null
+          date?: string
+          mep_sell?: number | null
+          oficial_buy?: number | null
+          oficial_sell?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
+      fiscal_vouchers_v: {
+        Row: {
+          authorization_code: string | null
+          counterparty_doc: string | null
+          counterparty_doc_type: number | null
+          counterparty_name: string | null
+          created_at: string | null
+          currency: string | null
+          direction: string | null
+          exchange_rate: number | null
+          exempt: number | null
+          f_real: number | null
+          f_usd_blue: number | null
+          f_usd_mep: number | null
+          f_usd_oficial: number | null
+          id: string | null
+          import_id: string | null
+          issued_on: string | null
+          issuer_doc: string | null
+          market: string | null
+          net_0: number | null
+          net_10_5: number | null
+          net_2_5: number | null
+          net_21: number | null
+          net_27: number | null
+          net_5: number | null
+          net_taxed: number | null
+          net_untaxed: number | null
+          number_from: number | null
+          number_to: number | null
+          other_taxes: number | null
+          point_of_sale: number | null
+          sign: number | null
+          signed_total_ars: number | null
+          total: number | null
+          total_ars: number | null
+          updated_at: string | null
+          vat_10_5: number | null
+          vat_2_5: number | null
+          vat_21: number | null
+          vat_27: number | null
+          vat_5: number | null
+          vat_total: number | null
+          voucher_type: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_vouchers_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_voucher_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_vouchers_voucher_type_fkey"
+            columns: ["voucher_type"]
+            isOneToOne: false
+            referencedRelation: "fiscal_voucher_types"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      form_3064_monthly: {
+        Row: {
+          has_issued: boolean | null
+          has_received: boolean | null
+          month: string | null
+          purchases_foreign_usd: number | null
+          purchases_local_ars: number | null
+          sales_foreign_usd: number | null
+          sales_local_ars: number | null
+        }
+        Relationships: []
+      }
       products_with_stock: {
         Row: {
           active: boolean | null
@@ -555,6 +905,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cargar_comprobantes_arca: { Args: { archivo: Json }; Returns: Json }
       committed_stock: { Args: { p_product_id: string }; Returns: number }
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
