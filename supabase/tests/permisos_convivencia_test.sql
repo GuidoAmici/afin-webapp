@@ -6,7 +6,7 @@
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 BEGIN;
-SELECT plan(22);
+SELECT plan(25);
 
 -- ── Setup (superusuario) ─────────────────────────────────────────────────
 -- c1 cliente · c2 cliente · em rol empleado sin asignaciones · ed pedidos:editar
@@ -19,12 +19,14 @@ INSERT INTO auth.users (id, email, raw_app_meta_data) VALUES
   ('c1c1c1c1-0000-0000-0000-000000000005', 'conv-co@test.dev', '{}'::jsonb),
   ('c1c1c1c1-0000-0000-0000-000000000006', 'conv-uv@test.dev', '{}'::jsonb),
   ('c1c1c1c1-0000-0000-0000-000000000007', 'conv-bf1@test.dev', '{"role":"empleado"}'::jsonb),
-  ('c1c1c1c1-0000-0000-0000-000000000008', 'conv-bf2@test.dev', '{"role":"admin"}'::jsonb);
+  ('c1c1c1c1-0000-0000-0000-000000000008', 'conv-bf2@test.dev', '{"role":"admin"}'::jsonb),
+  ('c1c1c1c1-0000-0000-0000-000000000009', 'conv-vo@test.dev', '{}'::jsonb);
 
 INSERT INTO public.acceso_asignaciones (user_id, permiso) VALUES
   ('c1c1c1c1-0000-0000-0000-000000000004', 'pedidos:editar'),
   ('c1c1c1c1-0000-0000-0000-000000000005', 'pedidos:corregir'),
-  ('c1c1c1c1-0000-0000-0000-000000000006', 'usuarios:ver');
+  ('c1c1c1c1-0000-0000-0000-000000000006', 'usuarios:ver'),
+  ('c1c1c1c1-0000-0000-0000-000000000009', 'pedidos:ver');
 
 UPDATE public.products SET stock_fisico = 10, stock_status = 'en_stock' WHERE id = 'bomba-15-plata';
 
@@ -37,7 +39,9 @@ INSERT INTO public.orders (id, user_id, status, payment_status) VALUES
   ('d0d0d0d0-0000-0000-0000-000000000004', 'c1c1c1c1-0000-0000-0000-000000000001', 'despachado', 'pagado'),
   ('d0d0d0d0-0000-0000-0000-000000000005', 'c1c1c1c1-0000-0000-0000-000000000001', 'confirmado', 'pendiente'),
   ('d0d0d0d0-0000-0000-0000-000000000006', 'c1c1c1c1-0000-0000-0000-000000000001', 'pendiente',  'pendiente'),
-  ('d0d0d0d0-0000-0000-0000-000000000007', 'c1c1c1c1-0000-0000-0000-000000000002', 'pendiente',  'pagado');
+  ('d0d0d0d0-0000-0000-0000-000000000007', 'c1c1c1c1-0000-0000-0000-000000000002', 'pendiente',  'pagado'),
+  ('d0d0d0d0-0000-0000-0000-000000000008', 'c1c1c1c1-0000-0000-0000-000000000001', 'confirmado', 'pendiente'),
+  ('d0d0d0d0-0000-0000-0000-000000000009', 'c1c1c1c1-0000-0000-0000-000000000001', 'confirmado', 'pendiente');
 -- o7 (pagado, pendiente): compromete 3 de bomba-15-plata para el catálogo anónimo
 INSERT INTO public.order_items (order_id, product_id, quantity) VALUES
   ('d0d0d0d0-0000-0000-0000-000000000007', 'bomba-15-plata', 3);
@@ -67,15 +71,16 @@ SELECT throws_ok($$ SELECT public.transition_order('d0d0d0d0-0000-0000-0000-0000
   '42501', NULL, 'sin rol ni permisos: nivel 0, no confirma');
 
 -- ── is_staff() ───────────────────────────────────────────────────────────
+-- Escritura: pedidos:editar (no pedidos:ver) o el rol del JWT.
+SELECT set_config('request.jwt.claims',
+  '{"sub":"c1c1c1c1-0000-0000-0000-000000000009","app_metadata":{}}', true);
+SET LOCAL ROLE authenticated;
+SELECT is(public.is_staff(), false, 'is_staff: pedidos:ver solo (operario) no es staff');
+RESET ROLE;
 SELECT set_config('request.jwt.claims',
   '{"sub":"c1c1c1c1-0000-0000-0000-000000000004","app_metadata":{}}', true);
 SET LOCAL ROLE authenticated;
-SELECT is(public.is_staff(), false, 'is_staff: pedidos:editar solo (sin pedidos:ver) no es staff');
-RESET ROLE;
-INSERT INTO public.acceso_asignaciones (user_id, permiso) VALUES
-  ('c1c1c1c1-0000-0000-0000-000000000004', 'pedidos:ver');
-SET LOCAL ROLE authenticated;
-SELECT is(public.is_staff(), true, 'is_staff: con pedidos:ver sí');
+SELECT is(public.is_staff(), true, 'is_staff: pedidos:editar sí es staff');
 RESET ROLE;
 SELECT set_config('request.jwt.claims',
   '{"sub":"c1c1c1c1-0000-0000-0000-000000000003","app_metadata":{"role":"empleado"}}', true);
@@ -84,7 +89,27 @@ SELECT is(public.is_staff(), true, 'is_staff: el rol del JWT sigue valiendo');
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 SET LOCAL ROLE anon;
-SELECT is(public.is_staff(), false, 'is_staff: anon false, sin error');
+SELECT throws_ok($$ SELECT public.is_staff() $$, '42501', NULL, 'anon no ejecuta is_staff()');
+RESET ROLE;
+
+-- ── Override de la barrera de pago (confirmado -> en_preparacion sin pago) ─
+SELECT set_config('request.jwt.claims',
+  '{"sub":"c1c1c1c1-0000-0000-0000-000000000004","app_metadata":{}}', true);
+SET LOCAL ROLE authenticated;
+SELECT throws_ok($$ SELECT public.transition_order('d0d0d0d0-0000-0000-0000-000000000008','status','en_preparacion') $$,
+  '23514', NULL, 'pedidos:editar no saltea la barrera de pago');
+RESET ROLE;
+SELECT set_config('request.jwt.claims',
+  '{"sub":"c1c1c1c1-0000-0000-0000-000000000005","app_metadata":{}}', true);
+SET LOCAL ROLE authenticated;
+SELECT lives_ok($$ SELECT public.transition_order('d0d0d0d0-0000-0000-0000-000000000008','status','en_preparacion') $$,
+  'pedidos:corregir sin rol saltea la barrera de pago (como admin)');
+RESET ROLE;
+SELECT set_config('request.jwt.claims',
+  '{"sub":"c1c1c1c1-0000-0000-0000-000000000003","app_metadata":{"role":"admin"}}', true);
+SET LOCAL ROLE authenticated;
+SELECT lives_ok($$ SELECT public.transition_order('d0d0d0d0-0000-0000-0000-000000000009','status','en_preparacion') $$,
+  'el admin por rol saltea la barrera de pago');
 RESET ROLE;
 
 -- ── Ítems sólo en pedidos pendientes ─────────────────────────────────────

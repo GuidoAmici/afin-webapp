@@ -4,7 +4,7 @@
 -- (empleado/admin) vale igual que antes; los permisos se SUMAN.
 --
 --   · backfill: empleado -> plantilla encargado, admin -> plantilla administrador
---   · is_staff(): rol del JWT o permiso pedidos:ver
+--   · is_staff(): rol del JWT o permiso pedidos:editar
 --   · transition_order: nivel de actor = el mayor entre rol y permisos
 --   · "Usuarios crean items": sólo en pedidos pendientes
 --   · profiles self-only (ADR-0015 de New Haze): lo propio, o todo con usuarios:ver / rol staff
@@ -42,23 +42,65 @@ REVOKE ALL ON FUNCTION private.sincronizar_permisos_desde_roles() FROM PUBLIC, a
 
 SELECT private.sincronizar_permisos_desde_roles();
 
--- ── is_staff(): rol del JWT o permiso ────────────────────────────────────
--- Pasa a SECURITY DEFINER: Postgres chequea el acceso al schema private al planificar
--- la función, aunque la rama no se ejecute, y anon (que evalúa is_staff() en políticas
--- de lectura pública) no tiene acceso a private. Como definer el chequeo es del dueño.
--- EXCEPCIÓN a "REVOKE de anon": sólo devuelve un booleano sobre el propio que llama
--- (igual que jwt_role()), y las políticas la necesitan para anon.
+-- ── is_staff(): rol del JWT o permiso pedidos:editar ─────────────────────
+-- is_staff() maneja políticas FOR ALL (escritura): por eso es pedidos:editar y no
+-- pedidos:ver (un operario sólo lee). Es SECURITY DEFINER porque Postgres chequea el
+-- acceso al schema private al planificar la función, aunque la rama no se ejecute, y
+-- el que llama es authenticated sin porqué tocar private directo. Sólo la ven
+-- authenticated y service_role: toda política que la usa va TO authenticated, así
+-- anon nunca la evalúa.
 -- COALESCE: nunca NULL (antes, sin rol en el JWT devolvía NULL).
 CREATE OR REPLACE FUNCTION public.is_staff()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT CASE
     WHEN COALESCE((SELECT auth.jwt()) -> 'app_metadata' ->> 'role' IN ('empleado', 'admin'), false) THEN true
     WHEN (SELECT auth.uid()) IS NULL THEN false
-    ELSE private.tiene_permiso('pedidos:ver')
+    ELSE private.tiene_permiso('pedidos:editar')
   END
 $$;
-REVOKE ALL ON FUNCTION public.is_staff() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_staff() TO anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.is_staff() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_staff() TO authenticated, service_role;
+
+-- Políticas que llaman a is_staff(): se recrean TO authenticated (mismo USING).
+DROP POLICY IF EXISTS "Staff gestiona todos los pedidos" ON public.orders;
+CREATE POLICY "Staff gestiona todos los pedidos"
+  ON public.orders FOR ALL TO authenticated
+  USING (public.is_staff());
+
+DROP POLICY IF EXISTS "Staff gestiona todos los items" ON public.order_items;
+CREATE POLICY "Staff gestiona todos los items"
+  ON public.order_items FOR ALL TO authenticated
+  USING (public.is_staff());
+
+DROP POLICY IF EXISTS "Staff gestiona order_events" ON public.order_events;
+CREATE POLICY "Staff gestiona order_events"
+  ON public.order_events FOR ALL TO authenticated
+  USING (public.is_staff());
+
+DROP POLICY IF EXISTS "Staff gestiona payments" ON public.payments;
+CREATE POLICY "Staff gestiona payments"
+  ON public.payments FOR ALL TO authenticated
+  USING (public.is_staff());
+
+DROP POLICY IF EXISTS "Staff gestiona settings" ON public.settings;
+CREATE POLICY "Staff gestiona settings"
+  ON public.settings FOR ALL TO authenticated
+  USING (public.is_staff());
+
+DROP POLICY IF EXISTS "Dueño lee sus comprobantes" ON storage.objects;
+CREATE POLICY "Dueño lee sus comprobantes"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'comprobantes' AND (
+      auth.uid()::text = (storage.foldername(name))[1]
+      OR public.is_staff()
+    )
+  );
+
+DROP POLICY IF EXISTS "Staff gestiona comprobantes" ON storage.objects;
+CREATE POLICY "Staff gestiona comprobantes"
+  ON storage.objects FOR ALL TO authenticated
+  USING (bucket_id = 'comprobantes' AND public.is_staff());
 
 -- ── transition_order: nivel = max(rol, permisos) ─────────────────────────
 -- Misma firma y mismos privilegios. transition_order_system y _core no se tocan.
@@ -77,11 +119,13 @@ DECLARE
   v_role  text := public.jwt_role();
   v_uid   uuid := auth.uid();
   v_level int;
+  v_corregir boolean;
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'no autenticado' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  v_corregir := private.tiene_permiso('pedidos:corregir');
   v_level := GREATEST(
     CASE v_role
       WHEN 'admin'    THEN 2
@@ -89,7 +133,7 @@ BEGIN
       ELSE 0
     END,
     CASE
-      WHEN private.tiene_permiso('pedidos:corregir') THEN 2
+      WHEN v_corregir THEN 2
       WHEN private.tiene_permiso('pedidos:editar')   THEN 1
       ELSE 0
     END
@@ -98,7 +142,7 @@ BEGIN
   RETURN public._transition_order_core(
     p_order_id, p_axis, p_to,
     v_uid, v_level, COALESCE(v_role, 'cliente'),
-    (v_role = 'admin'),
+    (COALESCE(v_role = 'admin', false) OR v_corregir),  -- (NULL-safe) override de la barrera de pago: nivel 2
     p_metadata
   );
 END;
@@ -117,7 +161,7 @@ CREATE POLICY "Usuarios crean items"
 
 -- ── profiles self-only ───────────────────────────────────────────────────
 -- "Cada usuario lee su propio perfil" ya existe. La lectura ajena pasa de is_staff()
--- (que ahora incluye pedidos:ver) a usuarios:ver o, mientras dure la convivencia,
+-- (que ahora incluye pedidos:editar) a usuarios:ver o, mientras dure la convivencia,
 -- el rol de staff del JWT.
 DROP POLICY IF EXISTS "Staff lee todos los perfiles" ON public.profiles;
 CREATE POLICY "Staff lee todos los perfiles"
