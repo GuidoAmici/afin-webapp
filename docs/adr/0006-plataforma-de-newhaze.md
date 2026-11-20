@@ -10,7 +10,7 @@ Se decidió adoptar esa plataforma:
 - **`stg-ci.yml` es el único CI.** Un PR contra `stg` aplica sus migraciones a la base de prueba al abrirse, para que el preview vea el schema del PR; por eso toda migración es expand-only.
 - **`release-prod.yml` con gate fail-closed** (`scripts/release-gate.mjs`): un release sin migraciones nuevas sale solo; uno con migraciones espera a un humano. Las migraciones de prod se aplican antes del merge de código (database-first).
 - **El hotfix se despacha a mano** (`workflow_dispatch`), corre las migraciones de prod con `scripts/db-push.mjs` antes del merge y hace back-merge a `stg`. Los pushes protegidos usan el token de la GitHub App, la única con bypass del ruleset «Protect stg and prod».
-- **`db-push.mjs` frena ante migraciones remotas desconocidas** salvo que figuren en la variable `MIGRACIONES_EXTERNAS`.
+- **`db-push.mjs` frena en prod ante migraciones remotas desconocidas** salvo que figuren en la variable `MIGRACIONES_EXTERNAS`. En la base de prueba (`migrate-stg`, `DESCONOCIDAS=avisar`) sólo avisa: ahí un PR de migración abierto ya aplicó su archivo y las demás ramas no lo tienen.
 - **Convenciones de PR y de merge a stg** en `AGENTS.md`, con el workflow `para-probar-stg.yml` que junta los ítems «Sólo vos» en un issue fijado.
 - **Los release toggles se alinean con los de New Haze** (`flags` detrás de apagado en prod para lo nuevo y visible). Los ops toggles de `settings` no cambian.
 
