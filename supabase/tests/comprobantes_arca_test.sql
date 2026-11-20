@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 BEGIN;
-SELECT plan(38);
+SELECT plan(44);
 
 -- ── Setup (superusuario) ─────────────────────────────────────────────────
 -- ca1: finanzas:cargar + finanzas:ver · ve1: sólo finanzas:ver · eq1: sólo equipo:acceder
@@ -22,7 +22,10 @@ INSERT INTO public.acceso_asignaciones (user_id, permiso) VALUES
 -- Cotizaciones: la última es la del 11/03; el comprobante del 12/03 usa la última.
 INSERT INTO public.usd_rates (date, oficial_buy, oficial_sell, blue_buy, blue_sell, mep_sell) VALUES
   ('2026-03-10', 990, 1000, 1190, 1200, 1100),
-  ('2026-03-11', 1090, 1100, 1290, 1300, 1150);
+  ('2026-03-11', 1090, 1100, 1290, 1300, 1150),
+  ('2026-07-03', 1190, 1200, NULL, NULL, NULL),   -- viernes
+  ('2026-07-06', 1290, 1300, NULL, NULL, NULL),   -- lunes
+  ('2026-08-14', 990, 1000, NULL, NULL, NULL);
 INSERT INTO public.cpi_monthly (month, pct, factor) VALUES ('2026-03-01', 3.5, 1.5);
 
 -- Archivo 1 (emitidos): una factura A y una nota de crédito A, marzo.
@@ -51,6 +54,25 @@ SELECT set_config('t.recibidos', $j${
      "authorization_code":"70000000000003","counterparty_doc_type":80,"counterparty_doc":"20000000003",
      "counterparty_name":"PROVEEDOR SINTETICO","issuer_doc":"20000000003","currency":"USD","exchange_rate":1000,
      "net_taxed":100,"net_untaxed":0,"exempt":0,"other_taxes":0,"vat_total":0,"total":100}
+  ]}$j$, true);
+-- Archivo 4 (emitidos): exportación en USD y NC E en USD (junio), exportación en pesos
+-- (agosto), y facturas en fechas sin cotización exacta.
+SELECT set_config('t.externos', $j${
+  "file_name": "externos.csv", "direction": "issued", "query_number": 4,
+  "queried_at": "2026-11-14T10:15:00-03:00",
+  "rows": [
+    {"direction":"issued","issued_on":"2026-06-10","voucher_type":19,"point_of_sale":3,"number_from":1,
+     "issuer_doc":"20000000001","currency":"USD","exchange_rate":1000,"total":100},
+    {"direction":"issued","issued_on":"2026-06-12","voucher_type":21,"point_of_sale":3,"number_from":1,
+     "issuer_doc":"20000000001","currency":"USD","exchange_rate":1000,"total":30},
+    {"direction":"issued","issued_on":"2026-08-14","voucher_type":19,"point_of_sale":3,"number_from":2,
+     "issuer_doc":"20000000001","currency":"ARS","exchange_rate":1,"total":200000},
+    {"direction":"issued","issued_on":"2026-07-04","voucher_type":1,"point_of_sale":4,"number_from":1,
+     "issuer_doc":"20000000001","currency":"ARS","exchange_rate":1,"net_taxed":100,"total":121},
+    {"direction":"issued","issued_on":"2026-09-01","voucher_type":1,"point_of_sale":4,"number_from":2,
+     "issuer_doc":"20000000001","currency":"ARS","exchange_rate":1,"net_taxed":100,"total":121},
+    {"direction":"issued","issued_on":"2026-02-01","voucher_type":1,"point_of_sale":4,"number_from":3,
+     "issuer_doc":"20000000001","currency":"ARS","exchange_rate":1,"net_taxed":100,"total":121}
   ]}$j$, true);
 -- Archivo con un tipo de comprobante inexistente: una fila buena y una con 999.
 SELECT set_config('t.tipo_malo', $j${
@@ -106,7 +128,7 @@ SELECT is((SELECT count(*)::int FROM public.fiscal_vouchers), 2, 'no se duplicó
 SELECT set_config('t.r3', public.cargar_comprobantes_arca(current_setting('t.emitidos_v2')::jsonb)::text, true);
 SELECT is(current_setting('t.r3')::jsonb->>'rows_new', '0', 'archivo superpuesto: 0 nuevas');
 SELECT is(current_setting('t.r3')::jsonb->>'rows_updated', '1', 'cambiar un total: 1 actualizada');
-SELECT is((SELECT total FROM public.fiscal_vouchers WHERE voucher_type = 3), 122::numeric,
+SELECT is((SELECT total FROM public.fiscal_vouchers WHERE issued_on = '2026-03-12'), 122::numeric,
   'el valor nuevo quedó guardado');
 SELECT is((SELECT count(*)::int FROM public.fiscal_voucher_imports), 3, 'una importación por archivo cargado');
 SELECT is((SELECT loaded_by FROM public.fiscal_voucher_imports LIMIT 1),
@@ -127,6 +149,8 @@ SELECT is((SELECT total_ars FROM public.fiscal_vouchers WHERE direction = 'recei
 -- Despacho de importación: CIF 500 en marzo.
 SELECT lives_ok($$ INSERT INTO public.import_declarations (number, registered_on, fob_usd, cif_usd)
   VALUES ('SINT-1', '2026-03-15', 450, 500) $$, 'finanzas:cargar inserta despachos');
+SELECT lives_ok($$ SELECT public.cargar_comprobantes_arca(current_setting('t.externos')::jsonb) $$,
+  'carga de exportaciones y fechas sin cotización exacta');
 RESET ROLE;
 
 -- ── Formulario 3064-7 (con finanzas:ver) ─────────────────────────────────
@@ -149,14 +173,24 @@ SELECT is((SELECT has_issued FROM public.form_3064_monthly WHERE month = '2026-0
   'marzo tiene emitidos: has_issued = true');
 
 -- ── Vista con factores de conversión ─────────────────────────────────────
-SELECT is((SELECT signed_total_ars FROM public.fiscal_vouchers_v WHERE voucher_type = 3), -122::numeric,
+SELECT is((SELECT signed_total_ars FROM public.fiscal_vouchers_v WHERE issued_on = '2026-03-12'), -122::numeric,
   'la nota de crédito resta en signed_total_ars');
-SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE voucher_type = 1 AND direction = 'issued'),
+SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE issued_on = '2026-03-10'),
   (1::numeric / 1000), 'f_usd_oficial usa la venta del día');
-SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE voucher_type = 3),
+SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE issued_on = '2026-03-12'),
   (1::numeric / 1100), 'una fecha posterior a la última cotización usa la última');
-SELECT is((SELECT f_real FROM public.fiscal_vouchers_v WHERE voucher_type = 3), 1.5::numeric,
+SELECT is((SELECT f_real FROM public.fiscal_vouchers_v WHERE issued_on = '2026-03-12'), 1.5::numeric,
   'f_real es el factor del IPC del mes');
+SELECT is((SELECT sales_foreign_usd FROM public.form_3064_monthly WHERE month = '2026-06-01'), 70::numeric,
+  'exportación USD 100 menos NC E USD 30 = 70 en sales_foreign_usd');
+SELECT is((SELECT sales_foreign_usd FROM public.form_3064_monthly WHERE month = '2026-08-01'), 200::numeric,
+  'exportación en pesos 200000 con oficial 1000 suma 200 U$S');
+SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE issued_on = '2026-07-04'),
+  (1::numeric / 1200), 'un sábado usa la cotización del viernes, no la última');
+SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE issued_on = '2026-09-01'),
+  (1::numeric / 1000), 'posterior a la última cotización usa la última');
+SELECT is((SELECT f_usd_oficial FROM public.fiscal_vouchers_v WHERE issued_on = '2026-02-01'),
+  (1::numeric / 1000), 'anterior a la primera cotización usa la primera disponible');
 RESET ROLE;
 
 -- ── Sin finanzas:ver no se lee nada ──────────────────────────────────────

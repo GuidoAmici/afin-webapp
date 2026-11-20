@@ -169,36 +169,50 @@ CREATE POLICY import_declarations_update ON public.import_declarations
 -- ── Vistas ───────────────────────────────────────────────────────────────────
 -- Un comprobante por fila, con los factores de conversión de su fecha (misma regla que
 -- invoices_v del panel): importe en pesos × f_real queda en pesos de hoy; × f_usd_*, en
--- dólares del día. Se usan los *_sell. Una fecha sin cotización usa la última.
+-- dólares del día. Se usan los *_sell. Cada factor toma la última cotización con valor en o
+-- antes de la fecha (un sábado usa la del viernes); si no hay ninguna anterior, la primera
+-- disponible. Una fecha posterior a la última cotización usa la última.
 CREATE VIEW public.fiscal_vouchers_v WITH (security_invoker = on) AS
 SELECT v.*,
        t.sign,
        t.market,
        v.total_ars * t.sign AS signed_total_ars,
        coalesce(c.factor, 1) AS f_real,
-       1 / coalesce(r.oficial_sell, (SELECT oficial_sell FROM public.usd_rates ORDER BY date DESC LIMIT 1)) AS f_usd_oficial,
-       1 / coalesce(r.blue_sell,    (SELECT blue_sell    FROM public.usd_rates ORDER BY date DESC LIMIT 1)) AS f_usd_blue,
-       1 / coalesce(r.mep_sell,     (SELECT mep_sell     FROM public.usd_rates ORDER BY date DESC LIMIT 1)) AS f_usd_mep
+       1 / coalesce(
+           (SELECT r.oficial_sell FROM public.usd_rates r
+             WHERE r.date <= v.issued_on AND r.oficial_sell IS NOT NULL ORDER BY r.date DESC LIMIT 1),
+           (SELECT r.oficial_sell FROM public.usd_rates r
+             WHERE r.oficial_sell IS NOT NULL ORDER BY r.date ASC LIMIT 1)) AS f_usd_oficial,
+       1 / coalesce(
+           (SELECT r.blue_sell FROM public.usd_rates r
+             WHERE r.date <= v.issued_on AND r.blue_sell IS NOT NULL ORDER BY r.date DESC LIMIT 1),
+           (SELECT r.blue_sell FROM public.usd_rates r
+             WHERE r.blue_sell IS NOT NULL ORDER BY r.date ASC LIMIT 1)) AS f_usd_blue,
+       1 / coalesce(
+           (SELECT r.mep_sell FROM public.usd_rates r
+             WHERE r.date <= v.issued_on AND r.mep_sell IS NOT NULL ORDER BY r.date DESC LIMIT 1),
+           (SELECT r.mep_sell FROM public.usd_rates r
+             WHERE r.mep_sell IS NOT NULL ORDER BY r.date ASC LIMIT 1)) AS f_usd_mep
 FROM public.fiscal_vouchers v
 JOIN public.fiscal_voucher_types t ON t.code = v.voucher_type
-LEFT JOIN public.usd_rates r ON r.date = v.issued_on
 LEFT JOIN public.cpi_monthly c ON c.month = date_trunc('month', v.issued_on)::date;
 
 -- Formulario 3064-7: sin IVA ni otros tributos, local en $ y externo en U$S.
 CREATE VIEW public.form_3064_monthly WITH (security_invoker = on) AS
 WITH v AS (
     SELECT date_trunc('month', f.issued_on)::date AS month,
-           coalesce(sum((f.net_taxed + f.net_untaxed + f.exempt) * f.exchange_rate * t.sign)
-                    FILTER (WHERE f.direction = 'issued' AND t.market = 'local'), 0)   AS sales_local_ars,
+           coalesce(sum((f.net_taxed + f.net_untaxed + f.exempt) * f.exchange_rate * f.sign)
+                    FILTER (WHERE f.direction = 'issued' AND f.market = 'local'), 0)   AS sales_local_ars,
+           -- Externo en U$S: un comprobante en USD va por su total; uno en pesos, a dólares
+           -- oficiales del día (el tipo de cambio de ARCA para un comprobante en pesos es 1).
            coalesce(sum(CASE WHEN f.currency = 'USD' THEN f.total
-                             ELSE f.total / nullif(f.exchange_rate, 0) END * t.sign)
-                    FILTER (WHERE f.direction = 'issued' AND t.market = 'foreign'), 0) AS sales_foreign_usd,
-           coalesce(sum((f.net_taxed + f.net_untaxed + f.exempt) * f.exchange_rate * t.sign)
-                    FILTER (WHERE f.direction = 'received' AND t.market = 'local'), 0) AS purchases_local_ars,
+                             ELSE f.total_ars * f.f_usd_oficial END * f.sign)
+                    FILTER (WHERE f.direction = 'issued' AND f.market = 'foreign'), 0) AS sales_foreign_usd,
+           coalesce(sum((f.net_taxed + f.net_untaxed + f.exempt) * f.exchange_rate * f.sign)
+                    FILTER (WHERE f.direction = 'received' AND f.market = 'local'), 0) AS purchases_local_ars,
            bool_or(f.direction = 'issued')   AS has_issued,
            bool_or(f.direction = 'received') AS has_received
-    FROM public.fiscal_vouchers f
-    JOIN public.fiscal_voucher_types t ON t.code = f.voucher_type
+    FROM public.fiscal_vouchers_v f
     GROUP BY 1
 ), d AS (
     SELECT date_trunc('month', registered_on)::date AS month, sum(cif_usd) AS purchases_foreign_usd
