@@ -7,7 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 BEGIN;
-SELECT plan(19);
+SELECT plan(21);
 
 -- ── UUIDs fijos ──────────────────────────────────────────────────────────
 -- cliente1 11..  cliente2 22..  empleado 33..  admin 44..
@@ -161,6 +161,28 @@ SELECT throws_ok(
        '11111111-1111-1111-1111-111111111111',2,'admin',true,'{}'::jsonb) $$,
   '42501', NULL,
   'authenticated no puede invocar el núcleo directamente');
+
+RESET ROLE;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- Usuario con permisos y sin rol, como authenticated (ejercita el GRANT EXECUTE)
+-- ════════════════════════════════════════════════════════════════════════
+INSERT INTO auth.users (id, email) VALUES
+  ('55555555-5555-5555-5555-555555555555', 'soloperm@test.dev');
+INSERT INTO public.acceso_asignaciones (user_id, permiso)
+  VALUES ('55555555-5555-5555-5555-555555555555', 'pedidos:editar');
+INSERT INTO public.orders (id, user_id, payment_status) VALUES
+  ('ffffffff-ffff-ffff-ffff-ffffffffffff', '11111111-1111-1111-1111-111111111111', 'en_revision');
+SELECT set_config('request.jwt.claims',
+  '{"sub":"55555555-5555-5555-5555-555555555555","app_metadata":{}}', true);
+SET LOCAL ROLE authenticated;
+
+SELECT lives_ok(
+  $$ SELECT public.transition_order('ffffffff-ffff-ffff-ffff-ffffffffffff','payment_status','pagado') $$,
+  'authenticated sin rol y con pedidos:editar confirma un pago');
+SELECT throws_ok(
+  $$ SELECT public.transition_order('ffffffff-ffff-ffff-ffff-ffffffffffff','payment_status','pendiente') $$,
+  '42501', NULL, 'pedidos:editar no corrige un pago ya confirmado (nivel 2)');
 
 RESET ROLE;
 

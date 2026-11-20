@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 BEGIN;
-SELECT plan(7);
+SELECT plan(14);
 
 -- ── Setup (como postgres) ────────────────────────────────────────────────
 -- El alta en auth.users dispara handle_new_user, que crea el profile.
@@ -76,6 +76,29 @@ SELECT throws_ok(
   '42501', NULL, 'el cliente no puede crear un pedido con payment_status inyectado');
 
 RESET ROLE;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- M2 (permisos): privilegios y search_path de lo que la migración crea/redefine
+-- ════════════════════════════════════════════════════════════════════════
+SET LOCAL ROLE anon;
+SELECT throws_ok($$ SELECT private.sincronizar_permisos_desde_roles() $$, '42501', NULL,
+  'anon no ejecuta sincronizar_permisos_desde_roles');
+SELECT throws_ok($$ SELECT public.is_staff() $$, '42501', NULL, 'anon no ejecuta is_staff()');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT throws_ok($$ SELECT private.sincronizar_permisos_desde_roles() $$, '42501', NULL,
+  'authenticated no ejecuta sincronizar_permisos_desde_roles');
+RESET ROLE;
+SELECT ok((SELECT proconfig @> ARRAY['search_path=""'] FROM pg_proc WHERE oid = 'public.is_staff()'::regprocedure),
+  'is_staff tiene search_path vacío');
+SELECT ok((SELECT proconfig @> ARRAY['search_path=""'] FROM pg_proc
+  WHERE oid = 'public.transition_order(uuid,text,text,jsonb)'::regprocedure),
+  'transition_order tiene search_path vacío');
+SELECT ok((SELECT proconfig @> ARRAY['search_path=""'] FROM pg_proc
+  WHERE oid = 'private.sincronizar_permisos_desde_roles()'::regprocedure),
+  'sincronizar_permisos_desde_roles tiene search_path vacío');
+SELECT ok(NOT has_function_privilege('anon', 'public.committed_stock(text)', 'EXECUTE'),
+  'anon no tiene EXECUTE sobre committed_stock');
 
 SELECT * FROM finish();
 ROLLBACK;
