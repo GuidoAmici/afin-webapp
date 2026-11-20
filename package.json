@@ -13,12 +13,16 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:local": "node scripts/supabase-guard.mjs && playwright test --config playwright.local.config.ts",
     "test:e2e:report": "playwright show-report",
-    "gen-types": "supabase gen types typescript --local > lib/database.types.ts",
-    "gen-types:check": "supabase gen types typescript --local | diff - lib/database.types.ts",
-    "gen-types:remote": "supabase gen types typescript --project-id wbsvxdquzvsawmjoiwat > lib/database.types.ts"
+    "db:types": "node scripts/supabase-guard.mjs && node scripts/db-types.mjs",
+    "db:types:check": "node scripts/supabase-guard.mjs && node scripts/db-types.mjs --check",
+    "db:types:remote": "supabase gen types typescript --project-id wbsvxdquzvsawmjoiwat --schema public > lib/database.types.ts",
+    "db:guard": "node scripts/supabase-guard.mjs status",
+    "db:guard:release": "node scripts/supabase-guard.mjs release"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
@@ -37,6 +41,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.7",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "yaml": "^2.9.1"
   }
 }

@@ -1,0 +1,712 @@
+# D8 (issue #11): feature → PR (checks + pgTAP + deploy-preview + e2e) → stg
+# (checks + migraciones + deploy + e2e como detección). Portado de newhaze-webapp.
+# E2E (issue #66, ADR-0010): gate en el PR contra el preview recién deployado;
+# en push corre tras deploy-stg pero solo como detección — release-please NO
+# depende de él (ADR-0007, el bump de versión está desacoplado de prod).
+# Migraciones: scripts/db-push.mjs (Management API + PAT; sin password de DB).
+# release-please (ADR-0006, ADR-0007): tras cada push a stg abre el Release PR,
+# lo auto-mergea y crea el tag en el mismo run — la versión avanza sola con cada
+# merge a stg. Promoción a prod: en cada push a stg, `auto-release` llama a
+# release-prod.yml con `automatico: true`; su gate frena si `prod..stg` trae
+# migraciones y deja escrito cómo salir a mano. Un `workflow_dispatch` manual de
+# release-prod.yml saltea el gate.
+# Runner fijado a ubuntu-24.04: Playwright aún no soporta chromium en ubuntu 26.04 (el actual ubuntu-latest).
+name: Stg CI — checks + migraciones + deploy
+
+on:
+  pull_request:
+    branches: [stg]
+  push:
+    branches: [stg]
+
+# contents: write porque dos jobs escriben: release-please (tags y Release PR) y
+# auto-release (merge stg → prod). Un job reusable no puede elevar por encima
+# del workflow, así que el default vive acá y no en el job.
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# RUNNER: `vars.CI_RUNNER` elige dónde corre cada job. Vacía → `ubuntu-24.04`
+# (GitHub). Con un label de runner propio → ese runner en la máquina del operador,
+# que no consume minutos (hasta el refill del 2026-10-31). Volver a GitHub es
+# borrar la variable, sin tocar este archivo. Los pasos con
+# `runner.environment == 'self-hosted'` adaptan lo que en una máquina
+# compartida choca: el stack de Supabase (otro project_id y puertos +1000, para
+# no pisar el de las sesiones), su limpieza al terminar, y el `--with-deps` de
+# Playwright (pide sudo; las librerías ya están instaladas en esa máquina).
+# Dependabot nunca va al runner propio: su PR corre `npm ci` o actions nuevas, código de
+# terceros sin revisar, con el usuario del operador. `github.actor` cubre PR abierto,
+# rebase y re-run (el re-run conserva al actor original); `pull_request.user.login`
+# cubre un commit humano sobre la rama de Dependabot. Esos PRs caen a `ubuntu-24.04`.
+jobs:
+  # Ahorro de minutos de Actions (el 2026-10-10 se agotaron los del mes y el CI
+  # de los tres repos quedó parado). Un PR o push que sólo toca documentación no
+  # necesita build, pgTAP, E2E ni deploy; uno que no toca la base no necesita
+  # pgTAP. Este job clasifica el diff y los demás leen sus outputs.
+  #
+  # Falla hacia el lado seguro: si el diff no se puede calcular, o aparece un
+  # archivo que no está en la lista de "sólo docs", corre todo. La lista es
+  # corta a propósito — mejor correr de más que saltear un cambio de código.
+  cambios:
+    name: Qué cambió (decide qué jobs corren)
+    # El Release PR (#290) va siempre a GitHub: con un solo runner propio, el
+    # job quedaría en cola detrás del que espera y el run no terminaría a tiempo.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.actor == 'github-actions[bot]' && github.event.pull_request.user.login == 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--stg--')) && 'ubuntu-24.04' || (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 3
+    outputs:
+      codigo: ${{ steps.clasificar.outputs.codigo }}
+      base: ${{ steps.clasificar.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Clasificar el diff
+        id: clasificar
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          ES_RELEASE_PR: ${{ github.event_name == 'pull_request' && github.actor == 'github-actions[bot]' && github.event.pull_request.user.login == 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release-please--branches--stg--') }}
+        run: |
+          set -uo pipefail
+          # El Release PR (release-please) sólo trae el bump de versión, el
+          # CHANGELOG y el manifest, generados a partir de commits que ya
+          # pasaron su propia CI. Se lo clasifica como "nada que correr" para
+          # que su run termine verde en segundos (#290). Se exige autor
+          # github-actions[bot], rama del mismo repo y prefijo de release-please:
+          # el nombre de rama solo lo puede copiar cualquiera.
+          if [ "$ES_RELEASE_PR" = "true" ]; then
+            echo "::notice::Release PR de release-please — sin build, pgTAP, E2E ni deploy."
+            echo "codigo=false" >> "$GITHUB_OUTPUT"
+            echo "base=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Tres puntos: lo que cambió del lado del PR desde el merge-base. En
+          # push, `before` es ancestro de `sha` y da lo mismo que dos puntos.
+          if ! ARCHIVOS=$(git diff --name-only "$BASE...$HEAD") || [ -z "$ARCHIVOS" ]; then
+            echo "::notice::Sin diff calculable ($BASE...$HEAD) — corre todo."
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+            echo "base=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$ARCHIVOS"
+          # Sólo docs: markdown de la raíz, docs/, .claude/. Nada de app/,
+          # components/, lib/, proxy.ts ni tests/ — el contenido del sitio puede
+          # vivir en archivos de texto.
+          # `[ -n "$(…)" ]` y no `grep -qv`: con -q y -v juntos GNU grep devuelve
+          # 1 aunque haya líneas que no matchean (se probó: daba "sólo docs" a
+          # un PR con una migración). Y un pipe a `grep -q` con pipefail puede
+          # morir por SIGPIPE. Contar la salida no tiene ninguna de las dos.
+          if [ -n "$(echo "$ARCHIVOS" | grep -vE '^([^/]+\.md|docs/.*|\.claude/.*)$')" ]; then
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "codigo=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sólo documentación — se saltean build, pgTAP, E2E y deploy."
+          fi
+          # La base: migraciones, tests pgTAP, los tipos generados (el job pgtap
+          # los compara) y los scripts que la tocan.
+          if [ -n "$(echo "$ARCHIVOS" | grep -E '^(supabase/|lib/database\.types\.ts$|scripts/db-|scripts/supabase-|\.github/workflows/)')" ]; then
+            echo "base=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  checks:
+    name: Lint + tipos + tests + build
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+          # En el runner propio, sin caché: subiría todo ~/.npm del usuario (se colgó 16 min).
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+      - run: npm ci
+      # Antes que lint: si un workflow reusable pide un permiso que su llamador
+      # no concede, el run entero no arranca —sin log en ningún job— y el CI
+      # del PR no lo ve, porque el job que invoca está detrás de un `if` de
+      # push. Verlo acá es lo único que lo separa de romper stg al mergear.
+      - run: node scripts/check-workflow-permissions.mjs
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:scripts
+      # `setup-node` cachea `~/.npm` (las descargas), no `.next/cache` (el
+      # trabajo del compilador). Sin esto Next recompila todo en cada run y lo
+      # avisa en el log. La key incluye el lock —un bump de Next invalida el
+      # cache, que es lo correcto— y el hash de las fuentes; `restore-keys`
+      # deja reusar el cache del run anterior cuando sólo cambió el código,
+      # que es el caso normal de un PR.
+      - name: Restaurar cache de build de Next
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**/*.[jt]s', 'app/**/*.[jt]sx', 'components/**/*.[jt]s', 'components/**/*.[jt]sx', 'lib/**/*.[jt]s', 'lib/**/*.[jt]sx', 'proxy.ts', 'tests/**/*.[jt]s', 'next.config.*', 'postcss.config.*') }}
+          restore-keys: |
+            next-${{ hashFiles('package-lock.json') }}-
+      # La verificación "tipos generados = schema" vive en el job `pgtap`, que
+      # valida contra el stack LOCAL con las migraciones de este PR aplicadas
+      # (no contra stg en vivo). Ver la nota en ese job.
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+
+  pgtap:
+    name: pgTAP — RLS y RPCs (stack local)
+    needs: cambios
+    if: needs.cambios.outputs.base == 'true'
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    # Un cuelgue de red debe fallar rápido, no consumir el presupuesto de
+    # Actions durante horas: la suite completa corre en ~2 min.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Antes de cualquier comando `supabase`: config.toml lee variables con
+      # env(), y el CLI no parsea el archivo entero si una falta —un bool sin
+      # setear da «'auth.enable_signup' cannot parse value as 'bool'»—. Quedan
+      # en el entorno de todos los pasos siguientes del job.
+      - name: Variables del stack local (supabase/env/local.env)
+        run: grep -E '^[A-Z_]+=' supabase/env/local.env >> "$GITHUB_ENV"
+      # Doble pin, a propósito: el ACTION va por SHA (no `@v2` móvil) y la CLI
+      # por versión fija (`version:` abajo). El tag `@v2` se movió una vez a una
+      # release que resolvía su binario por la API de GitHub sin token, se comía
+      # el rate limit y colgaba el job reintentando (nos costó un run de 3 h y el
+      # flake del pgTAP de #131). Con el SHA fijo esa deriva no puede volver a
+      # tocarnos; Dependabot propone los bumps como PR revisable. Al actualizar,
+      # bumpear también db:types si aplica.
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.109.1
+      # Stack local desde cero: aplica TODAS las migraciones a una DB vacía
+      # (garantiza reproducibilidad) y corre supabase/tests/*.sql (issue #65).
+      # No toca stg/prod: la frontera RLS se testea antes de migrar nada.
+      # Puertos 44xxx: Windows (WinNAT/Hyper-V) reserva al azar rangos del dinámico (49152+) y
+      # el 56303-56402 tomó el 56322 del stack: «ports are not available» en pgTAP y E2E. Debajo
+      # de 49152 no reserva. Se ve con `netsh int ipv4 show excludedportrange protocol=tcp`.
+      - name: Stack aislado del de desarrollo (runner local)
+        if: runner.environment == 'self-hosted'
+        run: |
+          sed -i -E \
+            -e 's/^project_id = "afin-website"/project_id = "afin-website-ci"/' \
+            -e 's/^(port|shadow_port) = 54([0-9]{3})$/\1 = 44\2/' \
+            -e 's/^inspector_port = 8083$/inspector_port = 8183/' \
+            supabase/config.toml
+          grep -nE '^(project_id|port|shadow_port|inspector_port) =' supabase/config.toml
+      - name: Levantar Postgres local (aplica TODAS las migraciones a una DB vacía)
+        run: supabase db start
+      - name: pgTAP — RLS y RPCs
+        run: supabase test db
+      # Database-first (ADR-0001): los tipos commiteados deben coincidir con el
+      # schema que producen las migraciones. Se genera desde el stack LOCAL (con
+      # las migraciones de ESTE PR ya aplicadas por `supabase db start`) y se
+      # compara con el archivo commiteado. Antes se comparaba contra stg EN VIVO,
+      # lo que hacía imposible poner en verde cualquier PR de esquema hasta
+      # aplicar su migración a stg a mano (huevo-y-gallina). Ahora el PR se valida
+      # solo, sin tocar stg. `git --no-pager diff --no-index` da un diff legible y
+      # sale con código ≠0 si hay drift.
+      - name: Tipos generados = migraciones del PR (database-first, ADR-0001)
+        run: |
+          supabase gen types typescript --local --schema public > /tmp/types.generated.ts
+          git --no-pager diff --no-index --exit-code lib/database.types.ts /tmp/types.generated.ts
+      - name: Bajar el stack del CI (runner local)
+        if: always() && runner.environment == 'self-hosted'
+        run: supabase stop --no-backup || true
+
+  e2e-local:
+    name: E2E local — flujos que escriben (stack Supabase)
+    needs: cambios
+    if: needs.cambios.outputs.codigo == 'true'
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    # El stack completo tarda más que el `db start` del pgTAP; aun así, un
+    # cuelgue debe fallar rápido y no comerse el presupuesto de Actions.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Antes de cualquier comando `supabase`: config.toml lee variables con
+      # env(), y el CLI no parsea el archivo entero si una falta —un bool sin
+      # setear da «'auth.enable_signup' cannot parse value as 'bool'»—. Quedan
+      # en el entorno de todos los pasos siguientes del job.
+      - name: Variables del stack local (supabase/env/local.env)
+        run: grep -E '^[A-Z_]+=' supabase/env/local.env >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+          # En el runner propio, sin caché: subiría todo ~/.npm del usuario (se colgó 16 min).
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.109.1
+      # Stack COMPLETO, no `supabase db start`: hacen falta GoTrue (para el
+      # recovery) y el servidor de mail de [local_smtp] (para leer lo que
+      # GoTrue manda). El seed crea el usuario de prueba — ver supabase/seed.sql.
+      # Las variables van ANTES de `supabase start`: sin ellas GoTrue toma el
+      # literal "env(SUPABASE_AUTH_SITE_URL)" como site_url y {{ .SiteURL }}
+      # sale sin resolver en todos los mails, con el link inservible.
+      - name: Stack aislado del de desarrollo (runner local)
+        if: runner.environment == 'self-hosted'
+        run: |
+          sed -i -E \
+            -e 's/^project_id = "afin-website"/project_id = "afin-website-ci"/' \
+            -e 's/^(port|shadow_port) = 54([0-9]{3})$/\1 = 44\2/' \
+            -e 's/^inspector_port = 8083$/inspector_port = 8183/' \
+            supabase/config.toml
+          grep -nE '^(project_id|port|shadow_port|inspector_port) =' supabase/config.toml
+      - name: Levantar el stack local (Postgres + GoTrue + mail)
+        run: |
+          set -a; . supabase/env/local.env; set +a
+          # En el runner local el dev server corre en 3999 (ver PORT abajo): GoTrue
+          # tiene que mandar los links de los mails a ese origen y permitirlo como
+          # redirect, o el recovery cae a site_url / conexión rechazada.
+          if [ "$RUNNER_ENVIRONMENT" = "self-hosted" ]; then
+            export SUPABASE_AUTH_SITE_URL=http://localhost:3999
+            export SUPABASE_AUTH_ADDITIONAL_REDIRECT_URLS='http://localhost:3999/**,http://127.0.0.1:3999/**'
+          fi
+          supabase start
+      - name: Credenciales del stack local
+        id: supa
+        run: |
+          supabase status -o json > /tmp/supa.json
+          echo "url=$(jq -r .API_URL /tmp/supa.json)" >> "$GITHUB_OUTPUT"
+          echo "anon=$(jq -r .ANON_KEY /tmp/supa.json)" >> "$GITHUB_OUTPUT"
+          # La service_role de demo del stack local: los tests fijan con ella la
+          # contraseña del usuario del seed (tests-local/usuario.ts, #336).
+          echo "service=$(jq -r .SERVICE_ROLE_KEY /tmp/supa.json)" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Restaurar browsers de Playwright
+        # En el runner propio los browsers ya están en ~/.cache/ms-playwright.
+        if: runner.environment == 'github-hosted'
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - name: Instalar browsers (solo si no hay caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install ${{ runner.environment == 'self-hosted' && ' ' || '--with-deps' }} chromium
+      # Sin secrets de Supabase remoto, a propósito (ADR-0021): esta suite no
+      # toca stg ni prod. Todo sale del stack efímero de este runner.
+      - name: Playwright — recovery de punta a punta
+        run: npm run test:e2e:local
+        env:
+          LOCAL_SUPABASE_URL: ${{ steps.supa.outputs.url }}
+          LOCAL_SUPABASE_ANON_KEY: ${{ steps.supa.outputs.anon }}
+          LOCAL_SUPABASE_SERVICE_ROLE_KEY: ${{ steps.supa.outputs.service }}
+          LOCAL_SMTP_URL: http://127.0.0.1:${{ runner.environment == 'self-hosted' && '44324' || '54324' }}
+          # En el runner local, un puerto que no use ningún worktree (.worktree-port).
+          PORT: ${{ runner.environment == 'self-hosted' && '3999' || '3000' }}
+      - name: Bajar el stack del CI (runner local)
+        if: always() && runner.environment == 'self-hosted'
+        run: supabase stop --no-backup || true
+
+  migrate-stg:
+    name: Migraciones → DB stg
+    # Corre tanto al mergear (push) como en el PR (pull_request contra stg): así
+    # el preview de Vercel del PR —que apunta a la DB de stg— ve el schema del PR
+    # SIN esperar el merge, y se puede testear el flujo real en el preview.
+    #
+    # CONTRATO EXPAND-ONLY (obligatorio): la migración se aplica a stg mientras
+    # el código EN VIVO de stg sigue siendo el anterior. Por eso las migraciones
+    # de un PR deben ser ADITIVAS / backward-compatible — add column nullable,
+    # add table, add RPC. NUNCA drop / rename / NOT NULL sin default en un PR
+    # abierto: romperían el stg deployado que todav­ía corre el código viejo.
+    # La contracción (drop de lo viejo) va en un PR posterior, tras el deploy.
+    # Nota: un PR que se cierra sin mergear deja su migración aplicada en stg
+    # (columna/tabla huérfana, inofensiva por additive) — limpiar a mano si hace falta.
+    # Sólo push llega a deploy-stg / release-please (sus `if` lo garantizan).
+    #
+    # Excepción Dependabot: GitHub aísla los secrets de sus PRs en un scope propio
+    # (`dependabot`), así que `secrets.AFIN_SUPABASE_ACCESS_TOKEN` llega VACÍO y
+    # db-push.mjs aborta. Es a propósito — un bot que actualiza dependencias no debe
+    # recibir credenciales de la DB. Y el job no aporta nada ahí: un bump nunca toca
+    # supabase/migrations/, así que el schema de stg ya es el que el preview necesita.
+    # `deploy-preview` sí depende de este job, y un `needs` skipeado arrastraría al
+    # dependiente — por eso su `if` lleva `!cancelled()`: el gate E2E tiene que seguir
+    # corriendo sobre los PRs de Dependabot, que es justo donde un bump puede romper
+    # la app. `deploy-stg` no necesita nada de eso: ya se limita a `push`.
+    #
+    # Con el filtro de `cambios`: en un PR corre sólo si tocó la base (si no,
+    # no hay nada que aplicar). En push corre siempre que haya código: es ~1 min
+    # y deja stg al día aunque un run anterior haya fallado a mitad. `checks` o
+    # `pgtap` salteados no lo frenan; fallados, sí.
+    if: >-
+      !cancelled() && github.actor != 'dependabot[bot]'
+      && needs.checks.result != 'failure' && needs.pgtap.result != 'failure'
+      && (needs.cambios.outputs.base == 'true'
+          || (github.event_name == 'push' && needs.cambios.outputs.codigo == 'true'))
+    needs: [cambios, checks, pgtap]
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+      - run: node scripts/db-push.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.AFIN_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: wbsvxdquzvsawmjoiwat
+          MIGRACIONES_EXTERNAS: ${{ vars.MIGRACIONES_EXTERNAS }}
+          # Sólo acá, la base de prueba: un PR de migración abierto ya aplicó su
+          # archivo (este mismo job corre en pull_request) y las demás ramas no
+          # lo tienen. Con el default (frenar) cada push a stg y cada otro PR de
+          # base quedaría en rojo mientras ese PR siga abierto. Avisa y sigue.
+          # release-prod y hotfix-prod no lo setean: en prod frena.
+          DESCONOCIDAS: avisar
+
+  deploy-preview:
+    name: Deploy preview (PR) → Vercel
+    # Gate del PR (#66, ADR-0010 §1): el preview ya corrió migrate-stg (mismo
+    # `if` de pull_request), así que ve el schema del PR sin esperar el merge.
+    #
+    # `!cancelled()` en vez de la condición implícita de `needs`: en los PRs de
+    # Dependabot `migrate-stg` se saltea a propósito (ver su comentario) y un
+    # dependiente hereda el skip por default, lo que apagaría el gate E2E justo
+    # en los PRs que más lo necesitan. Con `!cancelled()` el preview corre igual;
+    # `result != 'failure'` mantiene el gate honesto: si las migraciones fallan
+    # de verdad, no se deploya nada.
+    if: ${{ github.event_name == 'pull_request' && !cancelled() && needs.cambios.outputs.codigo == 'true' && needs.migrate-stg.result != 'failure' }}
+    needs: [cambios, migrate-stg]
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    outputs:
+      url: ${{ steps.wait.outputs.url }}
+    env:
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
+    steps:
+      # Sin VERCEL_TOKEN el job falla: un preview que no se deployó no puede
+      # dejar el gate en verde. La única excepción son los PRs de Dependabot:
+      # GitHub les pasa los secrets de su propio scope (`dependabot`), donde
+      # VERCEL_TOKEN no está, a propósito — ahí se saltea y el E2E también.
+      - name: VERCEL_TOKEN ausente
+        if: env.HAS_VERCEL != 'true'
+        env:
+          ES_DEPENDABOT: ${{ github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]' }}
+        run: |
+          if [ "$ES_DEPENDABOT" = "true" ]; then
+            echo "::notice::PR de Dependabot: sus secrets no traen VERCEL_TOKEN — el preview y el E2E se saltean."
+            exit 0
+          fi
+          echo "::error::Falta el secreto VERCEL_TOKEN: el preview no se deployó y el gate E2E no puede correr. Configurarlo y re-correr el job."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_VERCEL == 'true'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: env.HAS_VERCEL == 'true'
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+      - name: Deploy preview (entorno preview)
+        if: env.HAS_VERCEL == 'true'
+        id: deploy
+        run: |
+          set -euo pipefail
+          npm install -g vercel@latest
+          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          RESULT=$(vercel deploy --prebuilt --no-wait --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Esperar deployment READY (timeout 5 min)
+        if: env.HAS_VERCEL == 'true'
+        id: wait
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.vercel.com/v13/deployments/${{ steps.deploy.outputs.id }}?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}")
+            STATE=$(echo "$RESPONSE" | jq -r '.readyState')
+            echo "Intento $i — estado: $STATE"
+            if [ "$STATE" = "READY" ]; then
+              HOST=$(echo "$RESPONSE" | jq -r '.url')
+              HOST="${HOST#https://}"
+              HOST="${HOST#http://}"
+              echo "url=https://${HOST}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            [ "$STATE" = "ERROR" ] && echo "::error::El deployment terminó en ERROR" && exit 1
+            [ "$STATE" = "CANCELED" ] && echo "::error::El deployment fue cancelado" && exit 1
+            [ "$STATE" = "null" ] && echo "::error::Respuesta inválida de Vercel API: $RESPONSE" && exit 1
+            sleep 15
+          done
+          echo "::error::Timeout: el preview no llegó a READY en 5 minutos" && exit 1
+
+  deploy-stg:
+    name: Deploy stg → Vercel
+    # `!cancelled()`: migrate-stg puede quedar salteado (ver su `if`) y el skip
+    # no debe arrastrar al deploy. Fallado, sí lo frena.
+    if: ${{ github.event_name == 'push' && !cancelled() && needs.cambios.outputs.codigo == 'true' && needs.migrate-stg.result == 'success' }}
+    needs: [cambios, migrate-stg]
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.id }}
+    env:
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
+    steps:
+      # Sin VERCEL_TOKEN el job falla, como deploy-prod en release-prod.yml: si
+      # pasara en verde, auto-release vería un deploy-stg "exitoso" que no
+      # deployó nada. Este job sólo corre en push, así que Dependabot no llega.
+      - name: VERCEL_TOKEN ausente
+        if: env.HAS_VERCEL != 'true'
+        run: |
+          echo "::error::Falta el secreto VERCEL_TOKEN: stg no se deployó. Configurarlo y re-correr el job."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_VERCEL == 'true'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: env.HAS_VERCEL == 'true'
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+      - name: Deploy preview (entorno stg)
+        if: env.HAS_VERCEL == 'true'
+        id: deploy
+        run: |
+          set -euo pipefail
+          npm install -g vercel@latest
+          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          RESULT=$(vercel deploy --prebuilt --json --token=${{ secrets.VERCEL_TOKEN }})
+          if ! echo "$RESULT" | jq -e '.url' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió JSON válido: $RESULT"
+            exit 1
+          fi
+          if ! echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+            echo "::error::vercel deploy no devolvió un id de deployment: $RESULT"
+            exit 1
+          fi
+          # `vercel deploy --json` devuelve .url CON esquema, a diferencia del API
+          # /v13 que lo devuelve pelado. Anteponer https:// a ciegas daba
+          # "https://https://host", que el browser resuelve como https://https/
+          # y tumbaba los 13 specs. Se normaliza para que no importe la fuente.
+          HOST=$(echo "$RESULT" | jq -r '.url')
+          HOST="${HOST#https://}"
+          HOST="${HOST#http://}"
+          echo "url=https://${HOST}" >> "$GITHUB_OUTPUT"
+          echo "id=$(echo "$RESULT" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # AFIN: stg.afinsrl.com.ar se alía explícitamente al deployment recién
+      # creado (no hay integración por rama que lo haga). Sólo en push: este job
+      # no corre en PR, así que un preview sin mergear nunca pisa el dominio.
+      - name: Desvincular stg.afinsrl.com.ar de git branch
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          curl -sf -X PATCH \
+            "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/domains/stg.afinsrl.com.ar?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"gitBranch": null}'
+      - name: Asignar alias stg al deployment
+        if: env.HAS_VERCEL == 'true'
+        run: |
+          curl -sf -X POST \
+            "https://api.vercel.com/v2/deployments/${{ steps.deploy.outputs.id }}/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"alias": "stg.afinsrl.com.ar"}'
+
+  e2e:
+    name: Playwright — gate en PR / detección en push
+    # Corre tras el deploy que haya aplicado (deploy-preview en PR, deploy-stg
+    # en push) — el otro siempre está skipped por su propio `if` de evento, así
+    # que `always()` es necesario para no heredar ese skip (#66, ADR-0010 §1).
+    # Sin VERCEL_TOKEN los deploys fallan, salvo deploy-preview en un PR de
+    # Dependabot: termina en success sin deployar nada, y acá el guard
+    # HAS_VERCEL propio hace el skip limpio.
+    needs: [deploy-preview, deploy-stg]
+    if: always() && (needs.deploy-preview.result == 'success' || needs.deploy-stg.result == 'success')
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    env:
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
+      PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.url || needs.deploy-stg.outputs.url }}
+    steps:
+      - name: Vercel sin configurar → skip
+        if: env.HAS_VERCEL != 'true'
+        run: echo "VERCEL_TOKEN no esta configurado - el E2E se skipea"
+      - name: Sin URL de deployment → skip
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL == ''
+        run: echo "El deploy no expuso una URL (probablemente falló) - el E2E se skipea"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != ''
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != ''
+        with:
+          node-version: 24
+          # Sin esto setup-node autodetecta npm y, en el runner propio, su paso Post empaqueta
+          # todo ~/.npm (3 GB) y se cuelga: el job termina verde y el runner queda ocupado.
+          package-manager-cache: false
+          # En el runner propio, sin caché: subiría todo ~/.npm del usuario (se colgó 16 min).
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+      - run: npm ci
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != ''
+      - name: Restaurar browsers de Playwright
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != '' && runner.environment == 'github-hosted'
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - name: Instalar browsers (solo si no hay caché)
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != '' && steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install ${{ runner.environment == 'self-hosted' && ' ' || '--with-deps' }} chromium
+      - name: Playwright — suite E2E contra ${{ env.PLAYWRIGHT_BASE_URL }}
+        if: env.HAS_VERCEL == 'true' && env.PLAYWRIGHT_BASE_URL != ''
+        run: npx playwright test
+        env:
+          CI_SELF_HOSTED: ${{ runner.environment == 'self-hosted' && '1' || '' }}
+      - name: Subir reporte HTML (on failure)
+        if: failure() && env.HAS_VERCEL == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          # test-results trae capturas, trace y error-context de cada fallo.
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Release automático a producción. Va por `uses:` y no por workflow_run: ese
+  # trigger no se disparó ni una vez en la prueba real —depende de que GitHub
+  # matchee el `name` del workflow como string, y el nuestro lleva un em-dash—
+  # además de ser asíncrono. Una llamada explícita se ve en este mismo run.
+  #
+  # El gate de migraciones vive dentro de release-prod.yml: si el diff prod..stg
+  # trae migraciones, frena y deja escrito cómo salir a mano.
+  auto-release:
+    name: Release automático → prod
+    needs: [deploy-stg, e2e]
+    # `always()` por el mismo motivo que en e2e: deploy-preview está skipped en
+    # un push, y ese skip se propaga por la cadena de needs a menos que se corte
+    # explícitamente. Sin esto el job se salta antes de evaluar las condiciones
+    # de abajo, que es lo que pasó en la primera corrida real.
+    if: >-
+      always() && github.event_name == 'push'
+      && needs.deploy-stg.result == 'success'
+      && needs.e2e.result == 'success'
+    # `issues: write` además del `contents: write` del workflow: el paso final
+    # de release-prod etiqueta como `en-prod` los issues que promovió (#151).
+    # Un workflow reusable no puede elevar permisos por encima de quien lo
+    # llama, así que el permiso tiene que concederse acá — si falta, el run ni
+    # siquiera arranca ("workflow file issue"), que es lo que pasó al mergear
+    # #173 sin tocar este job.
+    permissions:
+      contents: write
+      issues: write
+    uses: ./.github/workflows/release-prod.yml
+    with:
+      automatico: true
+    secrets: inherit
+
+  release-please:
+    name: Release automático → stg
+    if: github.event_name == 'push'
+    needs: deploy-stg
+    runs-on: ${{ (github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: stg
+      # Se busca el Release PR abierto en vez de usar steps.release.outputs.pr:
+      # cuando el PR ya existía y este push no lo modifica (p. ej. commits ci:),
+      # la acción no emite output y el PR quedaría colgado sin mergear.
+      # El merge con GITHUB_TOKEN no re-dispara stg-ci: el commit de release
+      # (package.json + CHANGELOG + manifest) no genera deploy ni loop de CI.
+      - name: Auto-merge del Release PR
+        id: automerge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr=$(gh pr list --repo ${{ github.repository }} --state open \
+            --json number,headRefName,author \
+            -q '.[] | select(.author.login == "app/github-actions" or .author.login == "github-actions") | select(.headRefName | startswith("release-please--branches--stg--")) | .number' \
+            | head -1)
+          # Sólo se auto-mergea un Release PR cuyos commits son todos de
+          # github-actions[bot], hechos por la API (committer web-flow) y con
+          # firma verificada. Un commit humano empujado al PR no se saltea la
+          # CI: lo revisa una persona. Falla cerrado: si la consulta falla o no
+          # devuelve commits, tampoco se mergea. Imprime el sha del último
+          # commit verificado; el merge se ata a ese sha.
+          verificar() (
+            set -o pipefail
+            lineas=$(gh api "repos/${{ github.repository }}/pulls/$1/commits" --paginate \
+              --jq '.[] | (if (.author.login == "github-actions[bot]" and .committer.login == "web-flow" and .commit.verification.verified == true) then "ok" else "ajeno" end) + " " + .sha') || return 1
+            [ -n "$lineas" ] || return 1
+            [ -z "$(echo "$lineas" | grep -v '^ok ')" ] || return 1
+            echo "$lineas" | tail -1 | cut -d' ' -f2
+          )
+          sha=""
+          if [ -n "$pr" ]; then
+            sha=$(verificar "$pr") || sha=""
+            if [ -z "$sha" ]; then
+              echo "::warning::Release PR #$pr: no se pudo confirmar que todos sus commits son de github-actions[bot] verificados — no se auto-mergea."
+            fi
+          fi
+          if [ -n "$sha" ]; then
+            # Esperar a que termine el run de pull_request del Release PR antes
+            # de mergearlo (#290): si el PR se mergea con ese run recién
+            # creado, el run muere sin jobs y queda en rojo permanente. El run
+            # tarda unos segundos (el job `cambios` salta todo lo demás). Si no
+            # aparece o no termina en ~2 min, se mergea igual: el bump no
+            # depende de ese run. Un fallo pasajero del sondeo no corta la espera.
+            for _ in $(seq 1 24); do
+              estado=$(gh run list --repo ${{ github.repository }} --workflow stg-ci.yml \
+                --event pull_request --commit "$sha" --json status -q '.[].status' | sort -u | tr '\n' ' ') || true
+              case "$estado" in
+                "completed ") break ;;
+                *) sleep 5 ;;
+              esac
+            done
+            echo "Estado del run del Release PR antes de mergear: ${estado:-sin run}"
+            # --match-head-commit: si alguien empujó otro commit después de la
+            # verificación, el merge se rechaza en vez de llevarse ese commit.
+            if gh pr merge "$pr" --squash --match-head-commit "$sha" --repo ${{ github.repository }}; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::No se pudo mergear el Release PR #$pr (¿cambió su head?) — queda abierto."
+              echo "merged=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            [ -n "$pr" ] || echo "No hay Release PR abierto — nada que mergear."
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Tag + GitHub Release del PR recién mergeado
+        if: steps.automerge.outputs.merged == 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: stg

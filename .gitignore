@@ -22,3 +22,7 @@ npm-debug.log*
 playwright-report/
 test-results/
 .vercel
+
+# Python
+__pycache__/
+*.pyc
