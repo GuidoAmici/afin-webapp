@@ -29,4 +29,6 @@ Se decidió adoptar esa plataforma:
 - Los releases con migraciones no salen solos: los despacha una persona.
 - El hotfix ahora puede traer migraciones, con la misma regla expand-only y el mismo orden database-first que un release.
 - `MIGRACIONES_EXTERNAS` documenta lo que prod tiene y el repo no; agregar una versión ahí es una decisión de Guido, no del agente.
+- El rollback del hotfix revierte sólo código; la migración queda, y por eso las migraciones son expand-only. Si la migración se aplica y el merge a prod falla, la base queda migrada sin el código; no hay rollback automático de la base.
+- Re-despachar una rama hotfix después de un rollback falla a propósito (no hay nada que mergear): se revierte el revert o se corta otra rama.
 - Las ADR 0004 y 0005 quedan como historia, con una nota que apunta a esta.

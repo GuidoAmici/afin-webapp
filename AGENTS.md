@@ -16,6 +16,10 @@ Hay dos entornos: **`stg`** (base de prueba, `https://stg.afinsrl.com.ar`) y **`
 - **Todo lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible (esquema, refactor, arreglo interno) no lo necesita.
 - **Migraciones expand-only** (sólo agregan). Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido.**
 
+## Hotfix
+
+`hotfix-prod.yml` se despacha a mano desde una rama `hotfix/*` cortada de `prod` (falla si el ref no empieza con `hotfix/`). Migra la base de prod, mergea a `prod`, despliega y hace back-merge a `stg`. Si el deploy falla, el rollback revierte sólo el código: la migración queda. **Re-despachar la misma rama tras un rollback no mergea nada y el workflow falla a propósito**: revertí el revert en `prod` o cortá una rama `hotfix/*` nueva.
+
 ## Migración de un PR cerrado sin mergear
 
 Un PR con migración contra `stg` la aplica a la base de prueba al abrirse. Si el PR se cierra sin mergear, la migración queda aplicada ahí. Se limpia a mano, **sólo en la base de prueba, nunca en prod**: borrá los objetos que creó (tablas, funciones, columnas) y borrá su fila de `supabase_migrations.schema_migrations`. Si no, el próximo `db-push` ve una versión remota que el repo no tiene.
@@ -67,8 +71,8 @@ Cada ítem lleva **el link directo**, ya con los query params o el estado que ha
 **El agente que abrió el PR lo mergea a `stg`** cuando se cumplen **todos** estos gates. No hace falta la revisión del operador.
 
 1. **CI completo en verde** sobre el último commit: lint, tipos, tests, build, pgTAP, E2E, Playwright y migraciones a stg.
-   - **Los E2E en `success`, no en `skipped`.** GitHub muestra un job salteado como verde. En un PR draft los E2E no corren, y tampoco en el re-run de un run que empezó en draft, porque el payload queda congelado. Al marcar el PR listo, esperá el run del evento `ready_for_review` y mirá sus E2E. No alcanza con que `gh pr checks` dé verde: puede estar mostrando el run del draft.
-   - **Un PR de sólo docs no tiene run** (`paths-ignore` de `stg-ci.yml`). Sin checks, el gate se da por cumplido si **todos** los archivos del diff caen en esa lista.
+   - **Los E2E en `success`, salvo que `cambios` clasifique el PR como sólo docs.** `stg-ci.yml` corre en cada `pull_request` (tipos por defecto, sin condición de draft) y el job `cambios` clasifica el diff. No alcanza con que `gh pr checks` dé verde: GitHub muestra un job salteado como verde, así que mirá que los E2E hayan corrido (`success`) sobre el último commit.
+   - **PR de sólo docs.** Si todos los archivos del diff caen en `^([^/]+\.md|docs/.*|\.claude/.*)$` (la clasificación de `cambios`), los jobs de código quedan `skipped` y eso es lo **esperado**: el gate se da por cumplido con `cambios` en verde.
 2. **Revisión de código hecha por otro agente** (`/code-review` o un subagente revisor) sobre el diff final, **sin hallazgos abiertos**. Se deja constancia en un comentario del PR.
 3. **Lo nuevo y visible va detrás de un flag apagado en producción** (`lib/flags.ts`). Un cambio sin función visible no lo necesita.
 4. **Migraciones expand-only.** Si el PR trae algo que no lo es (`DROP`, `UPDATE`/`DELETE` de datos, cambios de permisos o de cuerpo sobre objetos que ya existen, `setval`), **no se abre sin la aprobación de Guido**, pedida por el Chief of Staff.
